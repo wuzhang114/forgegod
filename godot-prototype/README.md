@@ -35,15 +35,37 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| `00-m1-plan.md` | M1 假神闭环 + MechLang 语言定义(v0.1→v0.3) |
+| `00-m1-plan.md` | M1 假神闭环 + MechLang 语言定义(v0.1→v0.5) |
 | `01-mechanism-catalog-100.md` | 100 机制目录(A 88 / B 9 / C 3) |
 | `02-battle-system-design.md` | 战斗设计 v1: 六区乘区/25 态/判定链/节点路线图/播放器 |
+| `03-ai-generation-validation.md` | AI 生成 MechLang 验证(30/30 + 修复回环) |
+| `04-negotiation-validation.md` | 神前交涉验证(20 案 ×4 武器,20/20) |
+| `05-forge-design.md` | 锻造系统设计(Tetra 式面板决策版) |
+
+## 架构分层(数值/语言/逻辑/表现解耦)
+
+```text
+core/config/balance.gd       ★ 唯一数值源: 命中/暴击/六区公式/动作倍率/单位模板/25 态调度
+core/mechlang/               MechLang 语言引擎(lexer→parser→checker→vm)→ 机制契约
+core/forge/forge_core.gd     锻造轴: 材料表(8)→ 四维 → 缺陷 → 事实卡片 → fingerprint
+core/negotiation/            假神 ScriptedGod(关键词裁决,DivineTurn 协议)
+core/runtime/                battle_sim(六边形自走棋)/ damage_chain(六区)/ rng(确定性)
+core/flow/game_session.gd    跨场景会话(锻造→交涉→契约→战斗)
+scenes/                      表现层: forge/altar/battle(只消费 core 数据)
+tests/                       headless 测试(148 断言): 语言/战斗/锻造/假神/数值
+```
+
+铁律: 数值只在 balance.gd(锻造轴数值在 forge_core);core 不引用 Node/场景;一切可 headless 测试;一切确定性(同 seed 同事件流)。
 
 ## 目录速览
 
 ```text
-core/mechlang/      MechLang 语言(lexer/parser/checker/vm/host_api)
-core/runtime/       battle_sim / damage_chain / sim_entity / sim_contract / rng
-scenes/battle/      battle_demo(战斗播放器灰盒版)
-tests/              run_headless 主入口 + 各类测试
+core/config/       balance.gd(唯一数值源)
+core/mechlang/     MechLang 语言(lexer/parser/checker/vm/host_api)
+core/forge/        锻造核心(材料/四维/缺陷/事实/fingerprint)
+core/negotiation/  假神(关键词裁决)
+core/runtime/      battle_sim / damage_chain / hex_grid / sim_entity / sim_contract / rng
+core/flow/         game_session(跨场景会话)
+scenes/            forge(锻造台)/ altar(神裁砧)/ battle(棋盘战斗)
+tests/              run_headless 主入口 + 各类测试(148 断言)
 ```
