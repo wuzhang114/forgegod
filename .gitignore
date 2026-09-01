@@ -1,0 +1,30 @@
+# --- Godot ---
+godot-prototype/.godot/
+*.import
+godot-prototype/.mono/
+.godot/
+
+# --- Minecraft Mod(构建产物/运行产物) ---
+minecraft-mod-prototype/forgegod-mod/.gradle/
+minecraft-mod-prototype/forgegod-mod/build/
+minecraft-mod-prototype/forgegod-mod/run/
+minecraft-mod-prototype/forgegod-mod/run-test-client.bat
+*.jar
+!minecraft-mod-prototype/*.md
+
+# --- 一般 ---
+*.log
+.vscode/
+.idea/
+*.tmp
+.DS_Store
+Thumbs.db
+
+# --- 敏感信息(任何形式的密钥文件) ---
+*.key
+*.pem
+.env
+credentials*
+apikey*.*
+
+!minecraft-mod-prototype/forgegod-mod/gradle/wrapper/gradle-wrapper.jar

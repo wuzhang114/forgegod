@@ -1,0 +1,30 @@
+{
+  "cases": [
+    {"id": "N01", "weapon": "W1", "application": "连续射中同一个敌人三次后,召出三只火花小精灵,帮我打被标记的敌人"},
+    {"id": "N02", "weapon": "W1", "application": "打中敌人给他上一个印记,全队打这个印记目标时伤害更高"},
+    {"id": "N03", "weapon": "W1", "application": "我的箭命中敌人时会让他减速"},
+    {"id": "N04", "weapon": "W1", "application": "射出的箭会自己追踪敌人,很难躲"},
+    {"id": "N05", "weapon": "W2", "application": "格挡时把受到的伤害存进锤子,下一次重击全部释放出来"},
+    {"id": "N06", "weapon": "W2", "application": "重击命中后,电弧传导到旁边的敌人"},
+    {"id": "N07", "weapon": "W2", "application": "锤头有裂纹,我想赌一把:过载时威力翻倍,但可能直接断裂"},
+    {"id": "N08", "weapon": "W3", "application": "攻击附带冻结,把敌人冻在原地"},
+    {"id": "N09", "weapon": "W3", "application": "连击招架成功后反击会带出寒气"},
+    {"id": "N10", "weapon": "W2", "application": "普通攻击附带灼烧,让敌人烧起来"},
+    {"id": "N11", "weapon": "W2", "application": "召唤一道雷霆劈向敌人"},
+    {"id": "N12", "weapon": "W3", "application": "让我能飞起来,飞跃战场"},
+    {"id": "N13", "weapon": "W1", "application": "开局放一场全屏暴风雪,把所有敌人冻住"},
+    {"id": "N14", "weapon": "W4", "application": "这把匕首每次攻击附加火焰伤害"},
+    {"id": "N15", "weapon": "W2", "application": "重击有概率把敌人石化"},
+    {"id": "N16", "weapon": "W4", "application": "这把匕首可以斩断一切誓约"},
+    {"id": "N17", "weapon": "W1", "application": "开个传送门,把敌人全部送走"},
+    {"id": "N18", "weapon": "W2", "application": "砸中敌人直接让它死亡"},
+    {"id": "N19", "weapon": "W3", "application": "攻击时所有敌人一起承受伤害"},
+    {"id": "N20", "weapon": "W4", "application": "把匕首变成一条巨龙为我作战"}
+  ],
+  "expected": {
+    "must_accept_or_leveling": ["N01", "N02", "N03", "N04", "N05", "N06", "N07", "N08", "N09", "N12"],
+    "must_bargain": ["N10", "N11", "N13", "N14", "N15"],
+    "must_refuse_or_super_weaken": ["N16", "N17", "N18", "N19", "N20"],
+    "note": "must_bargain 允许 QUESTION/COUNTEROFFER 或显著弱化的 PROPOSE;must_refuse 允许 REFUSE 或大幅弱化的 COUNTEROFFER(强度不得超过原申请一半),但不得原样 PROPOSE"
+  }
+}

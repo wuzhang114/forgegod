@@ -1,0 +1,544 @@
+## 战斗播放器 v2(六边形棋盘 · 斜俯视 · 纸片人 · HD-2D 氛围)—— B3.6
+## 运行: godot --path godot-prototype scenes/battle/battle_demo.tscn
+## 流程: 布阵(拖动勇者排兵)→ 开始战斗 → 离线确定性模拟 → 逐 tick 快照 → 播放(变速/暂停/跳结束)。
+## 表现: 六边形棋盘(斜俯视压扁)、纸片人(转向/攻击时绕 Y 轴翻面 + 挥击)、
+##       HD-2D 氛围(天光渐变/远山剪影/地面暖色/月夜)、事件飘字、契约 HUD。
+
+extends Node2D
+
+const BattleSim := preload("res://core/runtime/battle_sim.gd")
+const DefEntity := preload("res://core/runtime/sim_entity.gd")
+const Parser := preload("res://core/mechlang/parser.gd")
+const Checker := preload("res://core/mechlang/checker.gd")
+const Grid := preload("res://core/runtime/hex_grid.gd")
+
+const SRC_BULWARK := """
+device 蓄能盾击 {
+  budget: { steps: 24, cooldown: 120 }
+  state: { charge: 0 }
+  on block {
+    charge = min(charge + blocked_damage * 0.2, 8)
+  }
+  on heavy_blow {
+    if charge >= 8 {
+      damage(target, "impact", 12)
+      charge = 0
+    }
+  }
+  on overload {
+    if charge >= 4 {
+      damage(target, "impact", 30)
+      charge = 0
+      damage_weapon(4)
+    }
+  }
+}
+"""
+
+const HEX_SIZE := 44.0
+const BOARD_ORIGIN := Vector2(330, 70)
+const Y_SQUASH := 0.52
+const PLAYER_ZONE_R := 1
+
+const HERO_COLORS := {"guard": Color(0.35, 0.65, 1.0), "duelist": Color(1.0, 0.55, 0.2),
+	"ranger": Color(0.35, 0.9, 0.5)}
+const ENEMY_COLOR := Color(0.75, 0.42, 0.38)
+
+var phase := "deploy"
+var sim = null
+var snapshots: Array = []
+var effects: Array = []
+var play_tick := 0
+var speed := 1.0
+var paused := false
+var total_ticks := 0
+var ui: Dictionary = {}
+var contract_src := ""          # 从 GameSession 读取的契约(若无则内置蓄能盾击)
+var contract_name := "蓄能盾击"
+
+## 布阵
+var deploy_entities: Array = []
+var drag_index := -1
+var drag_pos := Vector2.ZERO
+
+## 播放态单位视觉
+var unit_nodes: Dictionary = {}      # eid -> UnitNode
+
+
+func _ready() -> void:
+	_ready_contract()
+	_build_ui()
+	_setup_deploy()
+	_process_ui()
+
+
+## 从会话读契约(全流程);否则用内置演示契约
+func _ready_contract() -> void:
+	contract_src = SRC_BULWARK
+	var Session := preload("res://core/flow/game_session.gd")
+	if not Session.divine_contract.is_empty() and str(Session.divine_contract.get("source", "")).strip_edges() != "":
+		contract_src = str(Session.divine_contract.source)
+		contract_name = "玩家神赐契约"
+
+
+## ---------------- 坐标 ----------------
+
+func px_of(grid: Vector2i) -> Vector2:
+	var p := Grid.to_pixel(grid, HEX_SIZE)
+	var proj := Vector2(p.x, p.y * Y_SQUASH)
+	return BOARD_ORIGIN + proj
+
+
+func pick_grid(mouse_px: Vector2) -> Vector2i:
+	var best := Vector2i(3, 0)
+	var best_d := INF
+	for q in range(8):
+		for r in range(5):
+			var c := Vector2i(q, r)
+			var d := px_of(c).distance_to(mouse_px)
+			if d < best_d:
+				best_d = d
+				best = c
+	return best
+
+
+## ---------------- 布阵 ----------------
+
+func _setup_deploy() -> void:
+	deploy_entities = [
+		{"id": "hero_1", "role": "guard", "name": "守卫·布兰特", "grid": Vector2i(3, 0)},
+		{"id": "hero_2", "role": "duelist", "name": "连击手·莉娅", "grid": Vector2i(5, 0)},
+		{"id": "hero_3", "role": "ranger", "name": "射手·锡拉", "grid": Vector2i(1, 0)},
+	]
+	for i in 5:
+		deploy_entities.append({"id": "enemy_%d" % (i + 1), "role": "brute",
+			"name": "石甲傀儡 %d" % (i + 1), "grid": Vector2i(i, 4)})
+	phase = "deploy"
+
+
+func _input(event: InputEvent) -> void:
+	if phase != "deploy":
+		return
+	if event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if drag_index >= 0:
+			var e: Dictionary = deploy_entities[drag_index]
+			var g := pick_grid(get_viewport().get_mouse_position())
+			if g.y <= PLAYER_ZONE_R and not _deploy_occupied(g):
+				e.grid = g
+			drag_index = -1
+			queue_redraw()
+		return
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		for i in deploy_entities.size():
+			var e: Dictionary = deploy_entities[i]
+			if not e.id.begins_with("hero_"):
+				continue
+			if px_of(e.grid).distance_to(event.position) < 40.0:
+				drag_index = i
+				break
+		queue_redraw()
+	elif event is InputEventMouseMotion and drag_index >= 0:
+		queue_redraw()
+
+
+func _deploy_occupied(g: Vector2i) -> bool:
+	for e in deploy_entities:
+		if e.grid == g:
+			return true
+	return false
+
+
+func _begin_battle() -> void:
+	sim = BattleSim.new(7)
+	for e in deploy_entities:
+		sim.add_entity(_make_entity(e))
+	var ast := Parser.new().parse(contract_src)
+	var checked := Checker.new().check(ast.ast)
+	sim.add_contract("c_bulwark", checked.ast, "hero_1",
+		{"id": "w_1", "max_durability": 100.0, "durability": 100.0, "defects": []})
+	sim.run(2400)
+	total_ticks = maxi(sim.tick, 1)
+	effects = sim.events.duplicate(true)
+	# 快照重放(末尾一条为"结算收尾"状态: 存活单位回到站姿)
+	var run := BattleSim.new(7)
+	for e in deploy_entities:
+		run.add_entity(_make_entity(e))
+	run.add_contract("c_bulwark", checked.ast, "hero_1",
+		{"id": "w_1", "max_durability": 100.0, "durability": 100.0, "defects": []})
+	snapshots = []
+	unit_nodes = {}
+	for _t in range(total_ticks):
+		run.tick_once()
+		snapshots.append(_snap_of(run))
+	run._settle_all()
+	snapshots.append(_snap_of(run))
+	# 创建纸片人
+	for eid in snapshots[0].keys():
+		if eid.begins_with("__"):
+			continue
+		var role: String = snapshots[0][eid].get("role", "")
+		var col: Color = HERO_COLORS.get(role, ENEMY_COLOR)
+		var u = UnitNode.new(eid, col, px_of(snapshots[0][eid].grid))
+		add_child(u)
+		unit_nodes[eid] = u
+	# 时间轴范围 = 实际战斗长度
+	if ui.has("slider"):
+		ui.slider.max_value = total_ticks
+		ui.slider.set_value_no_signal(0)
+	phase = "playing"
+
+
+## 生成单帧快照
+func _snap_of(run_) -> Dictionary:
+	var snap := {}
+	for e in run_.entities.values():
+		snap[e.id] = {"grid": e.grid, "hp": e.hp, "max_hp": e.max_hp,
+			"phase": e.current_action.get("phase", ""),
+			"tag": e.current_action.get("tag", ""),
+			"alive": e.alive, "role": e.get("role", "")}
+	snap["__contract"] = {}
+	if run_.contracts.has("c_bulwark"):
+		snap["__contract"]["charge"] = float(run_.contracts["c_bulwark"].vm.get_state().get("charge", 0.0))
+	return snap
+
+
+func _make_entity(e: Dictionary) -> Dictionary:
+	var is_hero: bool = e.id.begins_with("hero_")
+	var role: String = e.role
+	var Bal := preload("res://core/config/balance.gd")
+	var opt: Dictionary = Bal.hero_tpl(role) if is_hero else Bal.enemy_tpl(role)
+	opt = opt.duplicate()
+	opt.grid = e.grid
+	return DefEntity.make(e.id, ("hero" if is_hero else "enemy"),
+		("player" if is_hero else "enemy"), e.name, role, opt)
+
+
+## ---------------- 播放 ----------------
+
+var _acc := 0.0
+
+
+func _process(delta: float) -> void:
+	if phase == "playing" and not paused and play_tick < total_ticks:
+		_acc += delta * speed
+		while _acc >= 0.05 and play_tick < total_ticks:
+			_acc -= 0.05
+			play_tick += 1
+			_update_units()
+			_dispatch_effects(play_tick)
+		if ui.has("slider") and ui.slider.value != play_tick:
+			ui.slider.set_value_no_signal(play_tick)
+	_process_ui()
+	queue_redraw()
+
+
+## 重放: 跳转到任意 tick(立即刷新单位与特效,不播移动动画)
+func _set_tick(t: int) -> void:
+	play_tick = clampi(t, 0, total_ticks)
+	_update_units(false)
+	_dispatch_effects(play_tick)
+
+
+func _update_units(animate: bool = true) -> void:
+	if snapshots.is_empty():
+		return
+	var snap: Dictionary = snapshots[clampi(play_tick, 0, snapshots.size() - 1)]
+	for eid in unit_nodes.keys():
+		var u = unit_nodes[eid]
+		var e: Dictionary = snap.get(eid, {})
+		if e.is_empty():
+			continue
+		u.sync(e, px_of(e.grid), animate)
+
+
+func _dispatch_effects(t: int) -> void:
+	for ev in effects:
+		if int(ev.get("tick", -1)) == t:
+			_add_effect(ev)
+
+
+func _add_effect(ev: Dictionary) -> void:
+	var kind: String = ev.get("kind", "")
+	var pos := _px_of_eid(ev.get("target_id", ""))
+	match kind:
+		"attack":
+			if ev.get("hit_landed", 0) == 0:
+				_float(pos, "MISS", Color(0.85, 0.85, 0.85))
+			elif ev.get("blocked", false):
+				_float(pos, "格挡!", Color(0.6, 0.9, 1.0))
+			else:
+				_float(pos, "-%d" % int(ev.get("final_damage", 0.0)), Color(1.0, 0.45, 0.35))
+		"mechanic_damage":
+			_float(pos, "-%d" % int(ev.get("amount", 0.0)), Color(1.0, 0.8, 0.2))
+		"kill":
+			_float(pos, "击倒!", Color(1.0, 0.4, 0.8))
+		"interrupt":
+			_float(pos, "打断!", Color(0.95, 0.5, 1.0))
+		"armor_break":
+			_float(pos, "破甲!", Color(1.0, 0.7, 0.4))
+		"status_apply":
+			_float(pos, "+" + str(ev.get("status", "")), Color(0.9, 0.6, 0.4))
+
+
+func _px_of_eid(eid: String) -> Vector2:
+	if snapshots.is_empty():
+		return BOARD_ORIGIN
+	var snap: Dictionary = snapshots[clampi(play_tick, 0, snapshots.size() - 1)]
+	var e: Dictionary = snap.get(eid, {})
+	if e.is_empty():
+		return BOARD_ORIGIN
+	return px_of(e.grid)
+
+
+func _float(pos: Vector2, text: String, color: Color) -> void:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 16)
+	l.add_theme_color_override("font_color", color)
+	l.position = pos + Vector2(-24, -38)
+	ui.layer.add_child(l)
+	var tw := create_tween()
+	tw.tween_property(l, "position", l.position + Vector2(0, -36), 0.8)
+	tw.parallel().tween_property(l, "modulate:a", 0.0, 0.8)
+	tw.tween_callback(l.queue_free)
+
+
+## ---------------- 绘制(背景/棋盘/布阵单位) ----------------
+
+func _draw() -> void:
+	_draw_hd2d_bg()
+	_draw_board()
+	if phase == "deploy":
+		_draw_deploy_units()
+
+
+func _draw_hd2d_bg() -> void:
+	# 夜云天光渐变
+	draw_rect(Rect2(Vector2.ZERO, Vector2(1280, 720)), Color(0.08, 0.06, 0.12))
+	for i in 12:
+		var t := float(i) / 12.0
+		var c := Color(0.12, 0.1, 0.2).lerp(Color(0.24, 0.17, 0.12), t)
+		draw_rect(Rect2(Vector2(0, 40 + i * 50), Vector2(1280, 50)), c)
+	# 远山剪影
+	var heights := [230.0, 195.0, 245.0, 185.0, 220.0, 205.0, 235.0, 210.0]
+	var pts := PackedVector2Array([Vector2(0, 40)])
+	var x := 0.0
+	var idx := 0
+	while x < 1290.0:
+		pts.append(Vector2(x, heights[idx % heights.size()]))
+		x += 170.0
+		idx += 1
+	pts.append(Vector2(1290, 40))
+	pts.append(Vector2(1290, 260))
+	pts.append(Vector2(0, 260))
+	draw_colored_polygon(pts, Color(0.1, 0.08, 0.15, 0.95))
+	# 地面暖色
+	draw_rect(Rect2(Vector2(0, 240), Vector2(1280, 480)), Color(0.18, 0.14, 0.11))
+	# 月亮与光晕
+	draw_circle(Vector2(1080, 84), 30.0, Color(0.92, 0.9, 0.78, 0.12))
+	draw_circle(Vector2(1080, 84), 20.0, Color(0.94, 0.92, 0.8, 0.9))
+	# 前景暗角
+	for i in 5:
+		draw_rect(Rect2(Vector2(0, 0), Vector2(1280, 14 + i * 7)), Color(0.0, 0.0, 0.0, 0.14))
+
+
+func _draw_board() -> void:
+	draw_rect(Rect2(BOARD_ORIGIN - Vector2(70, 50), Vector2(800, 330)), Color(0.22, 0.17, 0.13), true)
+	draw_rect(Rect2(BOARD_ORIGIN - Vector2(70, 50), Vector2(800, 330)), Color(0.55, 0.45, 0.3, 0.8), false, 2.0)
+	for q in range(8):
+		for r in range(5):
+			var c := Vector2i(q, r)
+			var p := px_of(c)
+			var pts := _hex_pts(p)
+			var base := Color(0.3, 0.24, 0.16) if (q + r) % 2 == 0 else Color(0.27, 0.22, 0.15)
+			if r <= PLAYER_ZONE_R:
+				base = base.lightened(0.06)
+			elif r >= 3:
+				base = base.darkened(0.05)
+			draw_colored_polygon(pts, base)
+			draw_polyline(pts, Color(0.6, 0.5, 0.36, 0.4), 1.0)
+
+
+func _hex_pts(p: Vector2) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for i in 6:
+		var ang := deg_to_rad(60.0 * i - 30.0)
+		out.append(p + Vector2(cos(ang), sin(ang) * Y_SQUASH) * (HEX_SIZE - 2.0))
+	return out
+
+
+func _draw_deploy_units() -> void:
+	for e in deploy_entities:
+		var p := px_of(e.grid)
+		var is_hero: bool = e.id.begins_with("hero_")
+		var col: Color = HERO_COLORS.get(e.role, ENEMY_COLOR) if is_hero else ENEMY_COLOR
+		if drag_index >= 0 and deploy_entities[drag_index].id == e.id:
+			p = get_viewport().get_mouse_position()
+		draw_circle(p + Vector2(0, -16), 7.0, col)
+		draw_rect(Rect2(p + Vector2(-10, -8), Vector2(20, 22)), col)
+		draw_rect(Rect2(p + Vector2(-10, -8), Vector2(20, 22)), Color(0, 0, 0, 0.5), false, 1.0)
+
+
+## ---------------- 纸片人单位节点 ----------------
+
+class UnitNode:
+	extends Node2D
+	var eid := ""
+	var color: Color
+	var facing := 1.0
+	var grid := Vector2i.ZERO
+	var hp_ratio := 1.0
+	var max_hp := 1.0
+	var phase := ""
+	var tag := ""
+	var alive := true
+	var bob := 0.0
+
+	func _init(id: String, c: Color, p: Vector2) -> void:
+		eid = id
+		color = c
+		z_index = 10
+		position = p
+
+	func sync(e: Dictionary, px: Vector2, animate: bool = true) -> void:
+		hp_ratio = clampf(e.hp / maxf(e.max_hp, 1.0), 0.0, 1.0)
+		max_hp = e.max_hp
+		phase = e.phase
+		tag = e.tag
+		alive = e.alive
+		# 死亡单位彻底隐藏(重放时同样生效)
+		visible = alive
+		# 移动/转向: 格变化时朝目标方向翻面 + 滑动(重放跳转则直接落位)
+		if e.grid != grid:
+			var dir := 1.0 if e.grid.x >= grid.x else -1.0
+			if dir != facing:
+				_flip()
+			grid = e.grid
+			if animate:
+				var tw := create_tween()
+				tw.tween_property(self, "position", px, 0.22).set_trans(Tween.TRANS_SINE)
+			else:
+				position = px
+		elif not animate:
+			position = px
+		queue_redraw()
+
+	func _flip() -> void:
+		# 纸片翻面: scale.x 1 -> 0.12 -> -1(绕竖轴)
+		var target := 1.0 if facing < 0 else -1.0
+		facing = target
+		var tw := create_tween()
+		tw.tween_property(self, "scale:x", 0.12 * facing, 0.1).set_trans(Tween.TRANS_QUAD)
+		tw.tween_property(self, "scale:x", 1.0 * facing, 0.1).set_trans(Tween.TRANS_QUAD)
+
+	func _draw() -> void:
+		if not alive:
+			return
+		# 待机浮动(纸片呼吸)
+		bob = sin(Time.get_ticks_msec() * 0.004) * 1.5
+		var base_y := bob
+		# 攻击摆动
+		var rot := 0.0
+		if phase == "active":
+			rot = sin(Time.get_ticks_msec() * 0.03) * 0.35
+		elif phase == "windup":
+			rot = -0.15
+		# (纸片阵列绘制)
+		draw_set_transform(Vector2(0, base_y), rot, Vector2.ONE)
+		# 头
+		draw_circle(Vector2(0, -18), 6.5, color.darkened(0.15))
+		# 身体
+		var h := 22.0
+		if phase == "windup":
+			h = 18.0
+		elif phase == "active":
+			h = 26.0
+		draw_rect(Rect2(Vector2(-9, -11), Vector2(18, h)), color)
+		draw_rect(Rect2(Vector2(-9, -11), Vector2(18, h)), Color(0, 0, 0, 0.5), false, 1.0)
+		# 武器(朝向侧)
+		var wx := 10.0 * facing
+		draw_line(Vector2(wx, -2), Vector2(wx + 14 * facing, -8), Color(0.85, 0.8, 0.7), 2.5)
+		if phase == "active":
+			draw_line(Vector2(wx + 14 * facing, -8), Vector2(wx + 20 * facing, 6), Color(1.0, 0.85, 0.4), 2.0)
+		if tag == "block" and phase == "active":
+			draw_circle(Vector2(wx, -10), 9.0, Color(0.6, 0.85, 1.0, 0.5))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		# 血条(不随体摆动)
+		draw_rect(Rect2(Vector2(-15, -32), Vector2(30, 4)), Color(0.1, 0.08, 0.1))
+		var hc := Color(0.9, 0.3, 0.3) if color == ENEMY_COLOR else Color(0.3, 0.9, 0.4)
+		draw_rect(Rect2(Vector2(-15, -32), Vector2(30 * hp_ratio, 4)), hc)
+
+
+## ---------------- UI ----------------
+
+func _build_ui() -> void:
+	ui.layer = Node2D.new()
+	add_child(ui.layer)
+	var bar := PanelContainer.new()
+	bar.position = Vector2(24, 630)
+	add_child(bar)
+	var hbox := HBoxContainer.new()
+	bar.add_child(hbox)
+	var add_btn := func(txt: String, cb: Callable) -> void:
+		var b := Button.new()
+		b.text = txt
+		b.pressed.connect(cb)
+		hbox.add_child(b)
+	add_btn.call("开始战斗", _begin_battle)
+	add_btn.call("0.5×", func(): speed = 0.5)
+	add_btn.call("1×", func(): speed = 1.0)
+	add_btn.call("2×", func(): speed = 2.0)
+	add_btn.call("暂停/继续", func(): paused = not paused)
+	# 重放控制
+	add_btn.call("⏮ 开头", func(): _set_tick(0))
+	add_btn.call("⏪ -3s", func(): _set_tick(play_tick - 60))
+	add_btn.call("⏩ +3s", func(): _set_tick(play_tick + 60))
+	add_btn.call("跳到结束", func(): _set_tick(total_ticks))
+	add_btn.call("← 返回铁匠铺", func():
+		get_tree().change_scene_to_file("res://scenes/forge/forge_scene.tscn"))
+	# 时间轴滑杆(重放: 拖动任意跳转)
+	ui.slider = HSlider.new()
+	ui.slider.min_value = 0.0
+	ui.slider.max_value = 2400.0
+	ui.slider.step = 1.0
+	ui.slider.custom_minimum_size = Vector2(900, 20)
+	ui.slider.value_changed.connect(func(v: float) -> void:
+		paused = true
+		_set_tick(int(v)))
+	ui.slider.position = Vector2(24, 550)
+	add_child(ui.slider)
+	ui.status = Label.new()
+	ui.status.position = Vector2(24, 605)
+	add_child(ui.status)
+	ui.tip = Label.new()
+	ui.tip.text = "布阵阶段: 拖动勇者到玩家区(下方两行)调整站位,点击[开始战斗]"
+	ui.tip.position = Vector2(24, 583)
+	ui.tip.modulate = Color(0.85, 0.85, 0.85)
+	add_child(ui.tip)
+	ui.title = Label.new()
+	ui.title.text = "B3.6 六边形棋盘·HD-2D 夜战演示 —— 守卫·布兰特 | 连击手·莉娅 | 射手·锡拉 vs 石甲傀儡×5"
+	ui.title.position = Vector2(24, 12)
+	add_child(ui.title)
+	ui.contract = Label.new()
+	ui.contract.position = Vector2(950, 36)
+	add_child(ui.contract)
+
+
+func _process_ui() -> void:
+	if ui.is_empty():
+		return
+	if phase == "playing":
+		var st := "进行中…"
+		if play_tick >= total_ticks:
+			st = "战斗结束: " + str(sim.battle_result)
+		ui.status.text = "tick %d/%d · %s · ×%s" % [play_tick, total_ticks, st, str(speed)]
+		var charge := 0.0
+		if not snapshots.is_empty():
+			var snap: Dictionary = snapshots[clampi(play_tick, 0, snapshots.size() - 1)]
+			charge = float(snap.get("__contract", {}).get("charge", 0.0))
+		ui.contract.text = "【蓄能盾击】储能 %.1f/8" % charge
+		# 重放提示
+		ui.tip.text = "拖动下方时间轴可回看任意时刻(自动暂停);⏮/⏪/⏩ 跳跃浏览"
+	else:
+		ui.status.text = "布阵阶段: 拖动勇者到玩家区(下方两行),点击[开始战斗]"
+		ui.contract.text = ""

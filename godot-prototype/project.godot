@@ -1,0 +1,22 @@
+; Engine configuration file.
+; ForgeGod 原型工程（M1 假神闭环 + MechLang 机制沙盒）
+config_version=5
+
+[application]
+
+config/name="ForgeGod Prototype"
+config/description="铁匠铺 x 锻造之神机制生成原型"
+run/main_scene="res://scenes/main/main.tscn"
+config/features=PackedStringArray("4.6")
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

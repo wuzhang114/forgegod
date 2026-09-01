@@ -1,0 +1,122 @@
+[
+  {
+    "id": "P01",
+    "source": "device FlameBlade {\n  auth: item;\n  budget: { entities: 2, steps: 8, cooldown: 8 };\n  state: { };\n  on attack {\n    spawn_projectile(120, 0);\n    apply_status(target, \"burning\", 60);\n  }\n}"
+  },
+  {
+    "id": "P02",
+    "source": "device EnergyShield {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 0 };\n  state: { energy: 0; };\n  on hurt {\n    energy += hurt_damage;\n  }\n  on hit {\n    if (energy >= 50) {\n      damage(target, \"physical\", energy);\n      energy = 0;\n    }\n  }\n}"
+  },
+  {
+    "id": "P03",
+    "source": "device SoulEater {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 0 };\n  state: { stacks: 0; bonus: 0; };\n  on kill {\n    if (stacks < 10) {\n      stacks += 1;\n      bonus += 2;\n    }\n  }\n  on hit {\n    if (bonus > 0) {\n      damage(target, \"physical\", bonus);\n    }\n  }\n}"
+  },
+  {
+    "id": "P04",
+    "source": "device SparkSummoner {\n  auth: item;\n  budget: { entities: 3, steps: 16, cooldown: 8 };\n  state: { hits: 0; };\n  on projectile_hit {\n    if (has_status(target, \"burning\")) {\n      hits += 1;\n    } else {\n      hits = 1;\n      apply_status(target, \"burning\", 3);\n    }\n    if (hits >= 3) {\n      spawn_sprite(3, 90, 30);\n      set_mark(target);\n      hits = 0;\n    }\n  }\n}"
+  },
+  {
+    "id": "P05",
+    "source": "device DamageRetaliation {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 0 };\n  state: { stored: 0; };\n  on block {\n    stored += blocked_damage;\n  }\n  on attack {\n    if (stored > 0) {\n      damage(target, \"physical\", stored);\n      stored = 0;\n    }\n  }\n}"
+  },
+  {
+    "id": "P06",
+    "source": "device CinderBlade {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 4 };\n  state: { };\n  on hit {\n    apply_status(target, \"burning\", 60);\n  }\n  on kill {\n    if (has_status(target, \"burning\")) {\n      for e in enemies_in_range(40) {\n        apply_status(e, \"burning\", 60);\n        damage(e, \"fire\", 20);\n      }\n    }\n  }\n}"
+  },
+  {
+    "id": "P07",
+    "source": "device ExecuteBlade {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 0 };\n  state: { };\n  on hit {\n    if (target_hp_ratio(target) < 0.3) {\n      damage(target, \"physical\", 60);\n    } else {\n      damage(target, \"physical\", 10);\n    }\n  }\n}"
+  },
+  {
+    "id": "P08",
+    "source": "device BlackHole {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 60 };\n  state: { };\n  on right_click {\n    create_zone(50, 180, 60, 0);\n  }\n}"
+  },
+  {
+    "id": "P09",
+    "source": "device MoonlightEdge {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 0 };\n  state: { };\n  on hit {\n    if (world_flag(\"night\")) {\n      damage(target, \"physical\", 25);\n    }\n  }\n}"
+  },
+  {
+    "id": "P10",
+    "source": "device HuntersMark {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 0 };\n  state: { };\n  on hit {\n    set_mark(target);\n    if (mark_count(target) > 0) {\n      damage(target, \"physical\", 12);\n    }\n  }\n}"
+  },
+  {
+    "id": "P11",
+    "source": "device BloodPact {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 0 };\n  state: { };\n  on attack {\n    damage_self(5);\n    damage(target, \"physical\", 15);\n  }\n}"
+  },
+  {
+    "id": "P12",
+    "source": "device LeechFang {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 0 };\n  state: { };\n  on kill {\n    heal_self(20);\n  }\n}"
+  },
+  {
+    "id": "P13",
+    "source": "device Frostbite {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 0 };\n  state: { };\n  on hit {\n    apply_status(target, \"slowed\", 90);\n  }\n}"
+  },
+  {
+    "id": "P14",
+    "source": "device SpiritWard {\n  auth: item;\n  budget: { entities: 3, steps: 16, cooldown: 60 };\n  state: { };\n  on right_click {\n    spawn_sprite(3, 240, 40);\n  }\n}"
+  },
+  {
+    "id": "P15",
+    "source": "device Riposte {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 0 };\n  state: { };\n  on block {\n    damage(attacker, \"physical\", 20);\n  }\n}"
+  },
+  {
+    "id": "P16",
+    "source": "device EmberForge {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 0 };\n  state: { heat: 0; };\n  on hit {\n    heat += 1;\n    if (heat > 20) {\n      heat = 0;\n      apply_status(self, \"disarmed\", 60);\n    } else if (heat >= 10) {\n      damage(target, \"fire\", heat);\n    }\n  }\n}"
+  },
+  {
+    "id": "P17",
+    "source": "device Shatter {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 0 };\n  state: { };\n  on hit {\n    if (has_status(target, \"stunned\")) {\n      damage(target, \"physical\", 30);\n    }\n  }\n}"
+  },
+  {
+    "id": "P18",
+    "source": "device Burst {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 4 };\n  state: { count: 0; };\n  on hit {\n    if (has_status(target, \"bleeding\")) {\n      count += 1;\n    } else {\n      count = 1;\n      apply_status(target, \"bleeding\", 3);\n    }\n    if (count >= 5) {\n      damage(target, \"physical\", 80);\n      count = 0;\n    }\n  }\n}"
+  },
+  {
+    "id": "P19",
+    "source": "device Bastion {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 60 };\n  state: { };\n  on right_click {\n    create_wall(8, 180);\n  }\n}"
+  },
+  {
+    "id": "P20",
+    "source": "device Rampart {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 20 };\n  state: { };\n  on right_click {\n    dash(6);\n  }\n  on hit {\n    knockback(target, 4);\n  }\n}"
+  },
+  {
+    "id": "P21",
+    "source": "device Quake {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 0 };\n  state: { energy: 0; };\n  on kill {\n    energy += 1;\n    if (energy >= 3) {\n      for e in enemies_in_range(80) {\n        damage(e, \"physical\", 20);\n      }\n      energy = 0;\n    }\n  }\n}"
+  },
+  {
+    "id": "P22",
+    "source": "device GlacialEdge {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 0 };\n  state: { };\n  on hit {\n    apply_status(target, \"frozen\", 90);\n  }\n}"
+  },
+  {
+    "id": "P23",
+    "source": "device LeechShield {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 0 };\n  state: { };\n  on hurt {\n    heal_self(6);\n  }\n}"
+  },
+  {
+    "id": "P24",
+    "source": "device Fireball {\n  auth: item;\n  budget: { entities: 2, steps: 16, cooldown: 30 };\n  state: { };\n  on right_click {\n    spawn_projectile(90, 0);\n  }\n  on projectile_hit {\n    for e in enemies_in_range(50) {\n      damage(e, \"fire\", 25);\n      apply_status(e, \"burning\", 60);\n    }\n  }\n}"
+  },
+  {
+    "id": "P25",
+    "source": "device Truesilver {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 0 };\n  state: { };\n  on hit {\n    damage(target, \"physical\", 10);\n    damage(target, \"physical\", min(armor_value(target), 40));\n  }\n}"
+  },
+  {
+    "id": "P26",
+    "source": "device Vengeance {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 0 };\n  state: { fury: 0; };\n  on hurt {\n    fury += 1;\n  }\n  on hit {\n    if (fury > 0) {\n      damage(target, \"physical\", fury);\n    }\n  }\n}"
+  },
+  {
+    "id": "P27",
+    "source": "device TwinSlash {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 0 };\n  state: { };\n  on hit {\n    if (rand_range(0, 100) < 30) {\n      damage(target, \"physical\", 20);\n    }\n  }\n}"
+  },
+  {
+    "id": "P28",
+    "source": "device Golem {\n  auth: item;\n  budget: { entities: 1, steps: 16, cooldown: 120 };\n  state: { };\n  on right_click {\n    spawn_sprite(1, 300, 20);\n  }\n}"
+  },
+  {
+    "id": "P29",
+    "source": "device Stormcaller {\n  auth: item;\n  budget: { entities: 0, steps: 16, cooldown: 60 };\n  state: { };\n  on timer {\n    if (count_entities() > 0) {\n      damage(nearest_enemy(self), \"lightning\", 30);\n    }\n  }\n}"
+  },
+  {
+    "id": "P30",
+    "source": "device SelfRepair {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 0 };\n  state: { };\n  on hit {\n    heal_weapon(1);\n  }\n}"
+  }
+]

@@ -1,0 +1,142 @@
+[
+  {
+    "id": "N01",
+    "stance": "PROPOSE",
+    "speech": "银木可容纳弱小灵体,非火之灵——三次命中后,我允你唤出三只银木精灵助阵。以灵线入空置媒介槽为祭。",
+    "cited_fact_ids": ["W1.material.silverwood", "W1.material.beast_bone", "W1.empty.slot"],
+    "draft": "device 星火猎弓 {\n  auth: item;\n  budget: { entities: 3, steps: 8, cooldown: 10 };\n  state: {};\n  on hit {\n    set_mark(target);\n    if (mark_count(target) >= 3) {\n      spawn_sprite(3, 10, 1);\n      clear_mark(target);\n      consume_offering(1);\n    }\n  }\n}"
+  },
+  {
+    "id": "N02",
+    "stance": "PROPOSE",
+    "speech": "兽筋弓弦感应猎物,命中即烙印记。印记所至,全队专攻可伤其要害。",
+    "cited_fact_ids": ["W1.material.beast_bone", "W1.role.ranger"],
+    "draft": "device 星火猎弓 {\n  auth: item;\n  budget: { entities: 0, steps: 6, cooldown: 6 };\n  state: {};\n  on hit {\n    set_mark(target);\n    apply_status(target, \"weakened\", 5);\n  }\n}"
+  },
+  {
+    "id": "N03",
+    "stance": "PROPOSE",
+    "speech": "星辉箭台令箭矢平稳精准,命中即扰其步伐——我赐你减速之法。",
+    "cited_fact_ids": ["W1.material.star_ore", "W1.craft.balance.good"],
+    "draft": "device 星火猎弓 {\n  auth: item;\n  budget: { entities: 0, steps: 4, cooldown: 3 };\n  state: {};\n  on hit {\n    apply_status(target, \"slowed\", 3);\n  }\n}"
+  },
+  {
+    "id": "N04",
+    "stance": "PROPOSE",
+    "speech": "星辉矿箭台可储星辉,主追踪之矢。你的箭将自行寻觅,难以躲闪。",
+    "cited_fact_ids": ["W1.material.star_ore", "W1.craft.balance.good"],
+    "draft": "device 星火猎弓 {\n  auth: item;\n  budget: { entities: 0, steps: 5, cooldown: 4 };\n  state: {};\n  on attack {\n    spawn_projectile(20, 1);\n  }\n}"
+  },
+  {
+    "id": "N05",
+    "stance": "PROPOSE",
+    "speech": "黑木回振,格挡之余力藏之锤中;重击时尽数倾泻,唯裂纹慎之。",
+    "cited_fact_ids": ["W2.material.blackwood", "W2.role.guard"],
+    "draft": "device 陨铁重锤 {\n  auth: item;\n  budget: { entities: 0, steps: 8, cooldown: 0 };\n  state: {};\n  on block {\n    set_weapon_state(\"stored\", blocked_damage);\n  }\n  on heavy_blow {\n    damage(target, \"physical\", weapon_state(\"stored\"));\n    set_weapon_state(\"stored\", 0);\n  }\n}"
+  },
+  {
+    "id": "N06",
+    "stance": "PROPOSE",
+    "speech": "赤铜导流,冲击化作电弧蔓延至侧敌。然此锤无天然雷源,须以雷属供物为引。",
+    "cited_fact_ids": ["W2.material.red_copper", "W2.lack.thunder"],
+    "draft": "device 陨铁重锤 {\n  auth: item;\n  budget: { entities: 1, steps: 8, cooldown: 8 };\n  state: {};\n  on heavy_blow {\n    consume_offering(1);\n    damage(nearest_enemy(target), \"lightning\", 12);\n    apply_status(nearest_enemy(target), \"stunned\", 2);\n  }\n}"
+  },
+  {
+    "id": "N07",
+    "stance": "PROPOSE",
+    "speech": "裂纹是命门,亦为赌注。过载则威力翻倍,锤身亦濒临断裂,此乃以刃换胜之契。",
+    "cited_fact_ids": ["W2.defect.stress_crack", "W2.craft.structure.mid"],
+    "draft": "device 陨铁重锤 {\n  auth: item;\n  budget: { entities: 0, steps: 10, cooldown: 6 };\n  state: {};\n  on overload {\n    damage(target, \"physical\", attack_value());\n    damage(target, \"physical\", attack_value());\n    damage_weapon(30);\n  }\n}"
+  },
+  {
+    "id": "N08",
+    "stance": "PROPOSE",
+    "speech": "霜钢寒凝,自带冻结之力。命中可令其冻滞,唯杂质或阻一线传导。",
+    "cited_fact_ids": ["W3.material.frost_steel", "W3.defect.impurity", "W3.lack.medium"],
+    "draft": "device 霜钢长剑 {\n  auth: item;\n  budget: { entities: 0, steps: 5, cooldown: 4 };\n  state: {};\n  on hit {\n    apply_status(target, \"frozen\", 3);\n  }\n}"
+  },
+  {
+    "id": "N09",
+    "stance": "PROPOSE",
+    "speech": "连击招架,反击自携寒气。招架得手即泄寒威,迟滞进犯者。",
+    "cited_fact_ids": ["W3.material.frost_steel", "W3.role.duelist"],
+    "draft": "device 霜钢长剑 {\n  auth: item;\n  budget: { entities: 0, steps: 5, cooldown: 4 };\n  state: {};\n  on block {\n    apply_status(attacker, \"slowed\", 6);\n  }\n}"
+  },
+  {
+    "id": "N10",
+    "stance": "COUNTEROFFER",
+    "speech": "陨铁怀星火之意,赤铜可引其丝缕。我降格为微焰灼烧,三息而熄;欲求久燃,须贡火属之源。",
+    "cited_fact_ids": ["W2.material.red_copper", "W2.material.star_iron"],
+    "draft": "device 陨铁重锤 {\n  auth: item;\n  budget: { entities: 0, steps: 5, cooldown: 6 };\n  state: {};\n  on hit {\n    apply_status(target, \"burning\", 3);\n  }\n}"
+  },
+  {
+    "id": "N11",
+    "stance": "COUNTEROFFER",
+    "speech": "赤铜可导引雷电,然锤中无持续放电之源。须以雷属供物为祭,我方能引一道雷霆。",
+    "cited_fact_ids": ["W2.material.red_copper", "W2.lack.thunder"],
+    "draft": "device 陨铁重锤 {\n  auth: item;\n  budget: { entities: 0, steps: 6, cooldown: 20 };\n  state: {};\n  on right_click {\n    consume_offering(2);\n    damage(target, \"lightning\", 30);\n    apply_status(target, \"stunned\", 2);\n  }\n}"
+  },
+  {
+    "id": "N12",
+    "stance": "COUNTEROFFER",
+    "speech": "霜钢非翱翔之器,无飞升媒介。唯你擅连击突刺——我赐疾驰之突,携寒掠过战场,而非腾空。",
+    "cited_fact_ids": ["W3.role.duelist", "W3.lack.medium", "W3.material.frost_steel"],
+    "draft": "device 霜钢长剑 {\n  auth: item;\n  budget: { entities: 0, steps: 5, cooldown: 8 };\n  state: {};\n  on right_click {\n    dash(3);\n    apply_status(nearest_enemy(self), \"slowed\", 4);\n  }\n}"
+  },
+  {
+    "id": "N13",
+    "stance": "QUESTION",
+    "speech": "星辉箭台仅储星辉,主光与追踪,并无霜属之件。全屏暴风雪须霜属媒介与持续供能——汝欲奉何物以成此霜?",
+    "cited_fact_ids": ["W1.material.star_ore", "W1.empty.slot"],
+    "missing": "全屏暴风雪缺乏依据:星辉箭台只储星辉、主发光与追踪(star_ore),无任何霜/冰属部件或媒介支撑全场冻结。补强方向:向空置媒介槽(empty.slot)嵌入霜属晶核/媒介并贡入持续供物;或将范围缩为小范围寒雾。"
+  },
+  {
+    "id": "N14",
+    "stance": "QUESTION",
+    "speech": "熟铁几无魔法亲和,亦无携火之材、媒介。汝要以何物为引,方令这柄凡铁生出灼焰?",
+    "cited_fact_ids": ["W4.material.grey_iron", "W4.lack.magic"],
+    "missing": "每次攻击附带火焰缺乏依据:熟铁几乎无魔法亲和(grey_iron),整体无魔法性质材料参与(lack.magic),缺少火属材料或媒介。补强方向:以火属材料重锻、嵌入火属媒介,或贡火属供物为引;否则凡铁无法承载灼焰。"
+  },
+  {
+    "id": "N15",
+    "stance": "COUNTEROFFER",
+    "speech": "陨铁主坠击,却无化石之性。我降格为:重击有概率令敌人僵立,而非化骨为石;若执意石化,须另寻石魄之材为祭。",
+    "cited_fact_ids": ["W2.material.star_iron", "W2.craft.temper.high"],
+    "draft": "device 陨铁重锤 {\n  auth: item;\n  budget: { entities: 0, steps: 6, cooldown: 8 };\n  state: {};\n  on heavy_blow {\n    if (rand_range(0, 1) > 0.4) {\n      apply_status(target, \"rooted\", 3);\n    }\n  }\n}"
+  },
+  {
+    "id": "N16",
+    "stance": "REFUSE",
+    "speech": "斩断誓约乃契约神权,非学徒之熟铁所能承载。此刃几无魔法亲和,亦无神圣之物——换一件奉誓的法器来。",
+    "cited_fact_ids": ["W4.material.grey_iron", "W4.lack.magic"],
+    "refuse_reason": "斩断一切誓约属契约/神权层级之权,远超武器可承载范围。W4 熟铁几乎无魔法亲和(grey_iron),亦无任何魔法性质材料参与(lack.magic),材质与媒介皆不足以维系誓约之理。补强路径:以神圣/封印类材料重锻,或换用专司誓约的仪式法器,并辅以供奉。"
+  },
+  {
+    "id": "N17",
+    "stance": "REFUSE",
+    "speech": "星辉主光与追踪,并无洞开空间之门之能。传送乃虚空权柄,你的猎弓承载不起。",
+    "cited_fact_ids": ["W1.material.star_ore", "W1.empty.slot"],
+    "refuse_reason": "开启传送门属空间/虚空权柄,远超星火猎弓所载。星辉箭台只储星辉、主发光与追踪(star_ore),无任何空间类媒介;空置媒介槽(empty.slot)亦仅提示可嵌爆裂晶核/灵线,不能承载传送。补强路径:嵌入虚空/空间类媒介,或改用专司位移的法器。"
+  },
+  {
+    "id": "N18",
+    "stance": "COUNTEROFFER",
+    "speech": "一击取命非此锤所能。然陨铁开锋、淬火极硬——我赐你震碎铠甲的重击,而非夺命之威。",
+    "cited_fact_ids": ["W2.craft.temper.high", "W2.craft.structure.mid"],
+    "draft": "device 陨铁重锤 {\n  auth: item;\n  budget: { entities: 0, steps: 6, cooldown: 8 };\n  state: {};\n  on heavy_blow {\n    damage(target, \"physical\", 25);\n    reduce_armor(target, 3);\n  }\n}"
+  },
+  {
+    "id": "N19",
+    "stance": "REFUSE",
+    "speech": "单刃连击之剑,无媒介可散寒于全员;冰力只沿一剑而发,不能及于战场诸敌。",
+    "cited_fact_ids": ["W3.lack.medium", "W3.role.duelist", "W3.material.frost_steel"],
+    "refuse_reason": "W3 为单目标连击定位(duelist),且锻造时省略媒介部件(lack.medium),冰力只能沿一剑传导;杂质与低纯亦无法支撑全场广域。要使攻击波及所有敌人,需能分散能量的媒介或机括,此剑并无。补强路径:增补可扩散冰力的媒介/霜雾机括,或仍以单目标为主。"
+  },
+  {
+    "id": "N20",
+    "stance": "REFUSE",
+    "speech": "凡铁之匕,无灵可栖、无媒可化。化生巨龙须龙魂为引、灵器为器,学徒之刃承受不起。",
+    "cited_fact_ids": ["W4.material.grey_iron", "W4.lack.magic", "W4.role.fresh"],
+    "refuse_reason": "将匕首化为巨龙属灵兽/变身权阶,需能承载龙魂的灵兽容器与供给媒介。W4 为纯熟铁、几乎无魔法亲和(grey_iron),无任何魔法性质材料参与(lack.magic),且为新手/普通评级(role.fresh),远不能容纳龙魂。补强路径:取得龙核/龙魂并重锻为灵兽容器,或另求召唤龙魂的专用法器并配以供奉。"
+  }
+]

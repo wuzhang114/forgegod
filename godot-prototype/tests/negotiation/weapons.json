@@ -1,0 +1,105 @@
+{
+  "weapons": [
+    {
+      "id": "W1",
+      "name": "星火猎弓",
+      "kind": "bow",
+      "actions": ["ranged", "mark"],
+      "parts": {
+        "作用": "银木弓臂",
+        "承力": "黑木弓把",
+        "操控": "兽筋弓弦",
+        "媒介": "星辉矿箭台"
+      },
+      "craft": {"purity": 88, "structure": 84, "temper": 79, "balance": 86},
+      "defects": [],
+      "facts": [
+        {"id": "W1.material.silverwood", "text": "银木可短暂容纳弱小灵体,适合召唤小精灵类"},
+        {"id": "W1.material.blackwood", "text": "黑木回振:射击后保留部分力量供下一动作"},
+        {"id": "W1.material.beast_bone", "text": "兽筋弓弦来自魔兽,对猎物有天然感应"},
+        {"id": "W1.material.star_ore", "text": "星辉矿箭台可储存星辉,支持发光与追踪类"},
+        {"id": "W1.craft.balance.good", "text": "平衡度 86,弹道稳定,适合精准射击"},
+        {"id": "W1.craft.purity.good", "text": "纯净度 88,几乎没有杂质干扰"},
+        {"id": "W1.craft.temper.ok", "text": "热处理合格,弓臂弹性均匀"},
+        {"id": "W1.role.ranger", "text": "预定使用者为射手定位,擅长远程标记与风筝"},
+        {"id": "W1.empty.slot", "text": "媒介槽尚空:可嵌入如爆裂晶核/灵线等补充手段"}
+      ]
+    },
+    {
+      "id": "W2",
+      "name": "陨铁重锤",
+      "kind": "warhammer",
+      "actions": ["heavy_blow", "block", "armor_break"],
+      "parts": {
+        "作用": "陨铁锤头",
+        "承力": "黑木锤柄",
+        "操控": "熟铁握环",
+        "媒介": "赤铜媒介芯"
+      },
+      "craft": {"purity": 91, "structure": 76, "temper": 88, "balance": 84},
+      "defects": [
+        {"id": "W2.defect.stress_crack", "text": "锤头内应力裂纹:连续过载时耐久损耗翻倍"}
+      ],
+      "facts": [
+        {"id": "W2.material.star_iron", "text": "陨铁天外:支持位移、坠落、星火类论证,但工艺窗口极窄"},
+        {"id": "W2.material.blackwood", "text": "黑木回振:格挡后保留力量,支持储蓄再释放"},
+        {"id": "W2.material.red_copper", "text": "赤铜导流:元素与冲击可传导,支持扩散与雷电类"},
+        {"id": "W2.craft.purity.high", "text": "纯净度 91,材料很纯"},
+        {"id": "W2.craft.temper.high", "text": "热处理 88,硬度优秀,破甲能力强"},
+        {"id": "W2.craft.structure.mid", "text": "结构度 76,尚可但并非完美"},
+        {"id": "W2.defect.stress_crack", "text": "内应力裂纹:既是缺陷,也可能成为危险爆发的论据"},
+        {"id": "W2.role.guard", "text": "预定使用者为守卫定位,格挡与破甲是其强项"},
+        {"id": "W2.lack.thunder", "text": "材料中没有持续放电的天然源(需要雷源或供物)"}
+      ]
+    },
+    {
+      "id": "W3",
+      "name": "霜钢长剑",
+      "kind": "longsword",
+      "actions": ["combo", "parry"],
+      "parts": {
+        "作用": "霜钢剑身",
+        "承力": "兽骨护脊",
+        "操控": "熟铁护手",
+        "媒介": "无(锻造时省略)"
+      },
+      "craft": {"purity": 62, "structure": 71, "temper": 45, "balance": 60},
+      "defects": [
+        {"id": "W3.defect.impurity", "text": "低温淬火杂质:冰系能量传导时可能卡滞"}
+      ],
+      "facts": [
+        {"id": "W3.material.frost_steel", "text": "霜钢寒凝:低温淬火特性强,支持冻结与冰缓"},
+        {"id": "W3.material.beast_bone", "text": "兽骨护脊:韧而不脆,但本身无冰系亲和"},
+        {"id": "W3.craft.temper.low", "text": "热处理 45,剑身硬度低,破甲与高伤受限"},
+        {"id": "W3.craft.purity.low", "text": "纯净度 62,杂质较多"},
+        {"id": "W3.defect.impurity", "text": "杂质会妨碍冰系能量的完美传导"},
+        {"id": "W3.lack.medium", "text": "没有媒介部件:难以承载需持续供能的复杂效果"},
+        {"id": "W3.role.duelist", "text": "预定使用者为连击定位,快速连刺与招架是强项"}
+      ]
+    },
+    {
+      "id": "W4",
+      "name": "学徒的熟铁匕首",
+      "kind": "dagger",
+      "actions": ["basic", "combo"],
+      "parts": {
+        "作用": "熟铁刃",
+        "承力": "熟铁脊",
+        "操控": "布缠柄",
+        "媒介": "无"
+      },
+      "craft": {"purity": 55, "structure": 58, "temper": 40, "balance": 65},
+      "defects": [
+        {"id": "W4.defect.soft_steel", "text": "熟铁偏软:锋刃保持力差"},
+        {"id": "W4.defect.rust", "text": "有轻微锈迹"}
+      ],
+      "facts": [
+        {"id": "W4.material.grey_iron", "text": "熟铁耐修:维修成本低,但几乎无魔法亲和"},
+        {"id": "W4.craft.temper.low", "text": "热处理 40,硬度不足"},
+        {"id": "W4.craft.purity.low", "text": "纯净度 55,普通铁质"},
+        {"id": "W4.lack.magic", "text": "几乎没有任何魔法性质材料参与"},
+        {"id": "W4.role.fresh", "text": "持有者为新手目,装备评价普通"}
+      ]
+    }
+  ]
+}
