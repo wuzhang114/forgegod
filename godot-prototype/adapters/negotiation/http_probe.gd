@@ -17,26 +17,35 @@ static func probe(endpoint: String, key: String, model: String, timeout_s: int =
 		return {"ok": false, "error": "端点需为 http(s) 地址(可只填 base,如 https://api.deepseek.com)"}
 	var body := JSON.stringify({"model": model,
 		"messages": [{"role": "user", "content": "ping"}], "max_tokens": 8})
-	# 响应体收到临时文件: 失败时读取服务端错误原文(OpenAI 兼容错误带 message)
-	var tmp := "user://_probe_body.tmp"
+	# 注意: 含双引号的参数经 OS.execute -> CreateProcess 命令行会被 Windows 吃掉引号,
+	# 必须把 body 写临时文件,用 --data-binary @file 传入(JSON 引号完整保真)
+	var body_file := "user://_probe_req.tmp"
+	var bf := FileAccess.open(body_file, FileAccess.WRITE)
+	if bf == null:
+		return {"ok": false, "error": "无法写入请求临时文件"}
+	bf.store_string(body)
+	bf.close()
+	# 响应体也走临时文件: 失败时读取服务端错误原文(OpenAI 兼容错误带 message)
+	var resp_file := "user://_probe_resp.tmp"
 	var args := PackedStringArray([
-		"-s", "-o", ProjectSettings.globalize_path(tmp), "-w", "%{http_code} %{time_total}",
+		"-s", "-o", ProjectSettings.globalize_path(resp_file), "-w", "%{http_code} %{time_total}",
 		"--max-time", str(timeout_s),
 		"-H", "Content-Type: application/json",
 	])
 	if key.strip_edges() != "":
 		args.append("-H")
 		args.append("Authorization: Bearer %s" % key)
-	args.append_array(["-d", body, "-X", "POST", full])
+	args.append_array(["--data-binary", "@" + ProjectSettings.globalize_path(body_file), "-X", "POST", full])
 	var out: Array = []
 	var exec_code := OS.execute("curl", args, out, false)
+	DirAccess.remove_absolute(body_file)
 	if exec_code != 0:
 		return {"ok": false, "error": "curl 不可用或执行失败"}
 	var resp := str(out[0] if out.size() > 0 else "").strip_edges()
 	var parts := resp.split(" ")
 	var http_code := int(parts[0]) if parts.size() > 0 and parts[0].is_valid_int() else 0
 	var ms := float(parts[1] if parts.size() > 1 and parts[1].is_valid_float() else "0") * 1000.0
-	var detail := _read_body_detail(tmp)
+	var detail := _read_body_detail(resp_file)
 	if http_code == 200:
 		return {"ok": true, "latency_ms": ms, "endpoint": full}
 	var why := _explain_code(http_code, str(key).strip_edges() == "")
