@@ -269,8 +269,10 @@ func _run_battle(active_at: int) -> void:
 	var checked := Checker.new().check(ast.ast)
 	var qast := Parser.new().parse(SRC_QUAKE)
 	var qchecked := Checker.new().check(qast.ast)
-	sim.add_contract("c_bulwark", checked.ast, "hero_1", _battle_weapon())
-	sim.add_contract("c_quake", qchecked.ast, "hero_1", _battle_weapon())
+	# 两个契约共享同一武器对象: 任一契约扣耐久,UI 与另一契约都能读到(用户可见)
+	var weapon := _battle_weapon()
+	sim.add_contract("c_bulwark", checked.ast, "hero_1", weapon)
+	sim.add_contract("c_quake", qchecked.ast, "hero_1", weapon)
 	if active_at >= 0:
 		sim.schedule_active("c_quake", active_at)
 	sim.run(2400)
@@ -281,8 +283,10 @@ func _run_battle(active_at: int) -> void:
 	run.configure_board(_board_bounds())
 	for e in deploy_entities:
 		run.add_entity(_make_entity(e))
-	run.add_contract("c_bulwark", checked.ast, "hero_1", _battle_weapon().duplicate(true))
-	run.add_contract("c_quake", qchecked.ast, "hero_1", _battle_weapon().duplicate(true))
+	# 快照重放侧同样共享武器对象(与 sim 侧独立,互不串场)
+	var weapon_run := _battle_weapon()
+	run.add_contract("c_bulwark", checked.ast, "hero_1", weapon_run)
+	run.add_contract("c_quake", qchecked.ast, "hero_1", weapon_run)
 	if active_at >= 0:
 		run.schedule_active("c_quake", active_at)
 	snapshots = []
@@ -777,6 +781,10 @@ func _build_ui() -> void:
 	ui.slider.value_changed.connect(func(v: float) -> void:
 		paused = true
 		_set_tick(int(v)))
+	# 松手后从定位点继续实时播放(与第一遍一致的滑动动画),而非定格瞬移
+	ui.slider.drag_ended.connect(func(_v: bool) -> void:
+		paused = false
+		_acc = 0.0)
 	ui.slider.position = Vector2(24, 550)
 	add_child(ui.slider)
 	ui.status = Label.new()
