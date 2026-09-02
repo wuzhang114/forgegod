@@ -549,12 +549,12 @@ class UnitNode:
 		alive = e.alive
 		# 死亡单位彻底隐藏(重放时同样生效)
 		visible = alive
-		# 任何位置变更前先杀掉在途移动 tween: 回放跳转后旧 tween 会把单位拖去过期位置
-		if mv_tween and mv_tween.is_valid():
-			mv_tween.kill()
-			mv_tween = null
-		# 移动/转向: 格变化时朝目标方向翻面 + 滑动(重放跳转则直接落位)
+		# 仅当位置即将被重新定义(换格/跳转)才杀在途 tween;
+		# 播放中的静止 sync 必须放行动画,否则移动 tween 会在起步 1 tick 后被冻结(单位卡在两格之间)
 		if e.grid != grid:
+			if mv_tween and mv_tween.is_valid():
+				mv_tween.kill()
+				mv_tween = null
 			var dir := 1.0 if e.grid.x >= grid.x else -1.0
 			if dir != facing:
 				_flip()
@@ -565,6 +565,9 @@ class UnitNode:
 			else:
 				position = px
 		elif not animate:
+			if mv_tween and mv_tween.is_valid():
+				mv_tween.kill()
+				mv_tween = null
 			position = px
 		queue_redraw()
 
