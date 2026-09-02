@@ -799,7 +799,14 @@ func _build_ui() -> void:
 	add_btn.call("⏩ +3s", func(): _set_tick(play_tick + 60))
 	add_btn.call("跳到结束", func(): _set_tick(total_ticks))
 	add_btn.call("← 返回铁匠铺", func():
-		GameApp.goto("forge"))
+		_settle_and_return())
+
+## 返回铁匠铺: 先结算(幂等: 同一 scenario 只结算一次),再导航
+func _settle_and_return() -> void:
+	if not last_report.is_empty():
+		var Settlement := preload("res://application/settle_day.gd")
+		Settlement.settle(GameApp.run, last_report)
+	GameApp.goto("forge")
 	# 右侧技能面板(主动技集中;垂直排列)
 	ui.skill_box = VBoxContainer.new()
 	ui.skill_box.position = Vector2(1075, 250)

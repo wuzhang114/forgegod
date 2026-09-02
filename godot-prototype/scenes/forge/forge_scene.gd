@@ -83,7 +83,23 @@ func _build_run_bar() -> void:
 			ui.tip.text = "没有存档")
 	mk.call("🌱 新游戏", func():
 		GameApp.new_game()
+		_refresh_runinfo()
 		ui.tip.text = "新局已开(第 1 天)")
+	# 运行信息(经济/队伍;RunState 唯一来源)
+	ui.runinfo = Label.new()
+	ui.runinfo.position = Vector2(400, 20)
+	ui.runinfo.add_theme_font_size_override("font_size", 14)
+	ui.runinfo.modulate = Color(0.85, 0.9, 0.8)
+	add_child(ui.runinfo)
+	_refresh_runinfo()
+
+
+func _refresh_runinfo() -> void:
+	var Inventory := preload("res://domain/economy/inventory.gd")
+	var r := GameApp.run
+	var rep := float(r.world_flags.get("reputation", 0.0))
+	ui.runinfo.text = "第 %d 天 · 金币 %.0f · 声望 %.0f · %s" % [
+		r.current_day, r.money, rep, Inventory.describe(r)]
 
 
 ## ---------------- 静态 UI ----------------
@@ -385,12 +401,19 @@ func _on_tab_clicked(t: String) -> void:
 
 
 func _on_next() -> void:
-	# 已完成全部阶段 -> 把武器送往神裁砧
+	# 已完成全部阶段 -> 消耗材料 -> 把武器送往神裁砧
 	if _is_finished() and not result_weapon.is_empty():
+		var Settlement := preload("res://application/settle_day.gd")
+		var Inventory := preload("res://domain/economy/inventory.gd")
+		if not Settlement.can_forge(GameApp.run):
+			ui.tip.text = "材料不足(需铁矿石×1 + 煤×1),先去回收吧"
+			return
+		Inventory.consume(GameApp.run, Settlement.FORGE_COST)
+		_refresh_runinfo()
 		var Session := preload("res://core/flow/game_session.gd")
 		Session.weapon_facts = result_weapon
 		# 同步进 RunState(武器事实入档,后续武器库迁移目标)
-		GameApp.run.weapons = [{"instance_id": "w_1", "facts": result_weapon,
+		GameApp.run.weapons = [{"instance_id": "w_%d" % GameApp.run.current_day, "facts": result_weapon,
 			"durability": 100.0, "contract_src": ""}]
 		GameApp.goto("altar")
 		return

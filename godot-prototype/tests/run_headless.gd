@@ -24,6 +24,7 @@ const LifeStealTests := preload("res://tests/test_lifesteal.gd")
 const RunStateTests := preload("res://tests/test_run_state.gd")
 const BattleScenarioTests := preload("res://tests/test_battle_scenario.gd")
 const ContentRegistryTests := preload("res://tests/test_content_registry.gd")
+const SettlementTests := preload("res://tests/test_settlement.gd")
 const ForgeTests := preload("res://tests/test_forge.gd")
 const GodTests := preload("res://tests/test_scripted_god.gd")
 const BalanceTests := preload("res://tests/test_balance.gd")
@@ -795,6 +796,7 @@ func _initialize() -> void:
 	_test_run_state()
 	_test_battle_scenario()
 	_test_content_registry()
+	_test_settlement()
 	_test_forge_core()
 	_test_scripted_god()
 	_test_balance()
@@ -1771,6 +1773,13 @@ func _test_content_registry() -> void:
 	var r: Dictionary = t.run()
 	print("-- 内容注册表/唯一计算: 通过 %d / 失败 %d --" % [r.pass, r.fail])
 	_check(r.ok, "内容注册表测试全绿")
+
+
+func _test_settlement() -> void:
+	var t := SettlementTests.new()
+	var r: Dictionary = t.run()
+	print("-- 经营结算: 通过 %d / 失败 %d --" % [r.pass, r.fail])
+	_check(r.ok, "经营结算测试全绿")
 
 
 func _test_forge_core() -> void:
