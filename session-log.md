@@ -538,3 +538,38 @@ M1 上游:WeaponFacts 自动生成(从部件/材料/工序产出事实卡片)→
 - 应玩家反馈,撤销战场 12° 整体偏转(删除 BOARD_TILT_DEG/TILT_C/TILT_S/_tilt),六边形恢复原朝向。
 - 保留其余三处修复:按图贴地(ground_y)、删除大矩形底框、重开战斗清理旧 UnitNode + 回放 kill tween。
 - 已验证: 148/148 全绿,战斗场景冒烟无报错。玩家窗口已重启(PID 83676)供查看。
+
+## 2026-09-02(收尾): 今日踩坑总结(战斗系统打磨日)
+
+### 高频坑(几乎每个都咬过一口)
+
+1. **GDScript 严格类型推导**:`var x := dict.value` / `var x := arr[i]`(Variant)全部编译失败 → 显式标注类型(`var d: Vector2i = Grid.DIRS[...]`)。出现 5+ 次,每次都是"假绿"信号。
+2. **假绿陷阱**:某个依赖脚本编译失败时,run_headless 输出"Nonexistent function 'new'"但仍打印"通过 N/失败 0"——因为子测试的 try 式调用被跳过而计数未记失败。教训:**跑完必须 grep "SCRIPT ERROR|Compile|FAIL"**,不能只看"通过"行。
+3. **移动 tween 被冻结**:sync() 开头无条件 kill 在途 tween → 播放路径单位冻结在两格间(拖进度条却正确)。修复:仅"位置将被重新定义"时杀 tween。
+4. **状态衰减 50×**:`if tick % 50 == 0: tick_statuses()` → 60 点眩晕实际 150s(近似永久),所有 DoT/控制时间被拉长 50 倍。
+5. **硬控只禁攻击不禁止移动**:眩晕单位照常走路 —— 移动检查只有 rooted;stunned/frozen/paralyzed/floating 需同样拦截。
+6. **契约 traits 从未生效**:resolve_attack 用空 traits;guaranteed_hit/ignores_evade/crit_mult 都是死配置。
+7. **仿真/表现双 sim 的武器副本隔离**:两个契约各持独立 weapon dict → 扣的是 A,HUD 读的是 B("没耗耐久")。
+8. **粘性窗口在攻击中也被消耗**:60-tick 窗口让"射程内攻击"的目标锁定随时失效;改为仅移动追逐时衰减。
+9. **SimHost 查询无差别解析第一个参数**:units_in_range(2) 的 int 半径被当实体解析 → "Invalid operands int==String";集合/数值类查询需跳过引用解析。
+10. **契约事件缺 self 上下文**:sim 广播的 ctx 不含持有者引用,契约里用 self 即运行时熔断 → SimContract.on_event 统一注入。
+11. **const 初始化不能调用函数**:`const X := deg_to_rad(12)` 非法 → 字面量三角值。
+12. **主动技重模拟丢失历史输入**("先放震地再放灼烧,前者消失")→ skill_log 累积模型。
+13. **治疗被上限截断**:heal_self 满血时增量 0 无事件(语义正确,"没回血"观感),配绿字+血条绿闪。
+14. **测试期望过时**:血量×3 后模板断言同步;粘性场景战术性重写(存在即合理断言)。
+15. **UI 内部单位绝不外露**:tick → 秒统一换算(_tick_s)。
+16. **命令里混入错误字符**导致 Godot 启动失败两次(多余引号/误传 PowerShell 参数) —— 启动命令每次照样检查。
+
+### 交付(今日 21 提交)
+
+- 视觉 4 修复(贴地/去框/偏转撤销/残留)→ 人物-格子对齐三连修(最终发现 tween 冻结为真凶)
+- 自走棋调研建议 2/3/4 落地:command 化弹道延迟命中、目标粘性 FSM、棋盘格效果层+几何助手(连线/锥形/击退落点)
+- 锻造产物全链路进战斗(武器面板/契约 traits 生效/耐久共享/独立乘区同桶加算)
+- 主动技系统:units_in_range、输入注入+确定性重模拟、冷却门控、技能面板右移三技能(守卫震地/射手灼烧格/连击手嗜血之舞)
+- DoT 体系(跳伤/叠层/3层上限)、scorch 灼烧格原语、heal/empower/nearest_ally 原语
+- 血量×3 长线战斗、全 UI 秒化、回放=拖轴定位+松手续播、非战斗残留清理
+- 测试 148 → 155 全绿(严查 SCRIPT ERROR 的真绿)
+
+### 调研
+
+- 6 个开源自走棋项目源码研读(teamfight-simulator / pumpkye / pokemonAutoChess / tft-modeling / battler / cingfong)→ docs/autochess-research.md
