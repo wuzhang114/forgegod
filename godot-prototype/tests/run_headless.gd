@@ -18,6 +18,7 @@ const BoardFxTests := preload("res://tests/test_board_effects.gd")
 const StickyTests := preload("res://tests/test_target_sticky.gd")
 const RangedTests := preload("res://tests/test_ranged_flight.gd")
 const WeaponStatsTests := preload("res://tests/test_weapon_stats.gd")
+const ActiveCastTests := preload("res://tests/test_active_cast.gd")
 const ForgeTests := preload("res://tests/test_forge.gd")
 const GodTests := preload("res://tests/test_scripted_god.gd")
 const BalanceTests := preload("res://tests/test_balance.gd")
@@ -783,6 +784,7 @@ func _initialize() -> void:
 	_test_sticky()
 	_test_ranged()
 	_test_wstats()
+	_test_active()
 	_test_forge_core()
 	_test_scripted_god()
 	_test_balance()
@@ -1717,6 +1719,13 @@ func _test_wstats() -> void:
 	var r: Dictionary = t.run()
 	print("-- 武器面板: 通过 %d / 失败 %d --" % [r.pass, r.fail])
 	_check(r.ok, "武器面板测试全绿")
+
+
+func _test_active() -> void:
+	var t := ActiveCastTests.new()
+	var r: Dictionary = t.run()
+	print("-- 主动技: 通过 %d / 失败 %d --" % [r.pass, r.fail])
+	_check(r.ok, "主动技测试全绿")
 
 
 func _test_forge_core() -> void:

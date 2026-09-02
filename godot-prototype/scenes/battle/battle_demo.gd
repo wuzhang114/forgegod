@@ -36,6 +36,19 @@ device 蓄能盾击 {
 }
 """
 
+const SRC_QUAKE := """
+device 震地怒涛 {
+  auth: item
+  budget: { entities: 12, steps: 32, cooldown: 300 }
+  on right_click {
+    for e in units_in_range(2) {
+      apply_status(e, "stunned", 60)
+    }
+    damage_weapon(3)
+  }
+}
+"""
+
 const HEX_SIZE := 50.0
 const Y_SQUASH := 0.54
 const BOARD_CENTER := Vector2(640, 430)  # 兜底;实际每张地图用 ground_y(贴地面带)
@@ -243,13 +256,23 @@ func _deploy_occupied(g: Vector2i) -> bool:
 
 
 func _begin_battle() -> void:
+	_run_battle(-1)
+
+
+## 构造并运行一场战斗;active_at >= 0 时在指定 tick 注入玩家主动技(确定性重模拟)
+func _run_battle(active_at: int) -> void:
 	sim = BattleSim.new(7)
 	sim.configure_board(_board_bounds())
 	for e in deploy_entities:
 		sim.add_entity(_make_entity(e))
 	var ast := Parser.new().parse(contract_src)
 	var checked := Checker.new().check(ast.ast)
+	var qast := Parser.new().parse(SRC_QUAKE)
+	var qchecked := Checker.new().check(qast.ast)
 	sim.add_contract("c_bulwark", checked.ast, "hero_1", _battle_weapon())
+	sim.add_contract("c_quake", qchecked.ast, "hero_1", _battle_weapon())
+	if active_at >= 0:
+		sim.schedule_active("c_quake", active_at)
 	sim.run(2400)
 	total_ticks = maxi(sim.tick, 1)
 	effects = sim.events.duplicate(true)
@@ -259,6 +282,9 @@ func _begin_battle() -> void:
 	for e in deploy_entities:
 		run.add_entity(_make_entity(e))
 	run.add_contract("c_bulwark", checked.ast, "hero_1", _battle_weapon().duplicate(true))
+	run.add_contract("c_quake", qchecked.ast, "hero_1", _battle_weapon().duplicate(true))
+	if active_at >= 0:
+		run.schedule_active("c_quake", active_at)
 	snapshots = []
 	# 清理上一次战斗残留的纸片人(重开战斗时必须释放旧节点,否则幽灵残影叠加)
 	for u in unit_nodes.values():
@@ -293,7 +319,8 @@ func _snap_of(run_) -> Dictionary:
 		snap[e.id] = {"grid": e.grid, "hp": e.hp, "max_hp": e.max_hp,
 			"phase": e.current_action.get("phase", ""),
 			"tag": e.current_action.get("tag", ""),
-			"alive": e.alive, "role": e.get("role", "")}
+			"alive": e.alive, "role": e.get("role", ""),
+			"stun": 1 if DefEntity.has_status(e, "stunned") else 0}
 	snap["__contract"] = {}
 	if run_.contracts.has("c_bulwark"):
 		snap["__contract"]["charge"] = float(run_.contracts["c_bulwark"].vm.get_state().get("charge", 0.0))
@@ -356,6 +383,18 @@ func _set_tick(t: int) -> void:
 	_dispatch_effects(play_tick)
 
 
+## 玩家手动释放主动技(震地怒涛): 以当前播放点为输入,注入 right_click 指令并确定性重模拟。
+## 快照/特效/时间轴全部重建;回退 30 tick(1.5s)让玩家看到施放瞬间。
+func _cast_active() -> void:
+	if phase != "playing" or play_tick >= total_ticks:
+		return
+	if sim == null or not sim.contracts.has("c_quake"):
+		return
+	var cast_at := maxi(play_tick, 1)
+	_run_battle(cast_at)
+	_set_tick(maxi(cast_at - 30, 0))
+
+
 func _update_units(animate: bool = true) -> void:
 	if snapshots.is_empty():
 		return
@@ -397,6 +436,39 @@ func _add_effect(ev: Dictionary) -> void:
 			_float(pos, "+" + str(ev.get("status", "")), Color(0.9, 0.6, 0.4))
 		"projectile_launch":
 			_spawn_projectile_fx(ev)
+		"active_cast":
+			_spawn_pulse_fx(_px_of_eid(ev.get("source_id", "")), HEX_SIZE * 1.9)
+
+
+## 施放冲击波: 从施放者格扩散的金色环
+func _spawn_pulse_fx(center: Vector2, radius: float) -> void:
+	var ring := PulseFX.new()
+	ring.position = center
+	ring.radius0 = HEX_SIZE * 0.5
+	ring.radius1 = radius
+	ui.layer.add_child(ring)
+	var tw := create_tween()
+	tw.tween_method(ring.set_t, 0.0, 1.0, 0.45).set_trans(Tween.TRANS_QUAD)
+	tw.tween_callback(ring.queue_free)
+
+
+## 扩散环节点
+class PulseFX:
+	extends Node2D
+	var t := 0.0
+	var radius0 := 30.0
+	var radius1 := 90.0
+
+	func _init() -> void:
+		z_index = 11
+
+	func set_t(v: float) -> void:
+		t = v
+		queue_redraw()
+
+	func _draw() -> void:
+		var r := lerpf(radius0, radius1, t)
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 40, Color(1.0, 0.85, 0.4, (1.0 - t) * 0.8), 3.0)
 
 
 ## 弹道飞行表现: 金矢从发射格滑向目标格(飞行时长与 sim 一致)
@@ -547,6 +619,7 @@ class UnitNode:
 	var phase := ""
 	var tag := ""
 	var alive := true
+	var stunned := false
 	var bob := 0.0
 	var texture: Texture2D = null
 	var mv_tween: Tween = null
@@ -564,6 +637,7 @@ class UnitNode:
 		phase = e.phase
 		tag = e.tag
 		alive = e.alive
+		stunned = int(e.get("stun", 0)) > 0
 		# 死亡单位彻底隐藏(重放时同样生效)
 		visible = alive
 		# 仅当位置即将被重新定义(换格/跳转)才杀在途 tween;
@@ -644,6 +718,9 @@ class UnitNode:
 		if tag == "block" and phase == "active":
 			draw_circle(Vector2(12 * facing, -26), 9.0, Color(0.6, 0.85, 1.0, 0.5))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		# 眩晕标记(头顶黄圈,不随体摆动)
+		if stunned:
+			draw_arc(Vector2(0, -UNIT_H - 14.0), 5.5, 0.0, TAU, 16, Color(1.0, 0.9, 0.35, 0.95), 2.0)
 		# 血条(头顶上方,不随体摆动)
 		var bar_y := -UNIT_H - 6.0
 		draw_rect(Rect2(Vector2(-15, bar_y), Vector2(30, 4)), Color(0.1, 0.08, 0.1))
@@ -681,6 +758,11 @@ func _build_ui() -> void:
 	add_btn.call("⏪ -3s", func(): _set_tick(play_tick - 60))
 	add_btn.call("⏩ +3s", func(): _set_tick(play_tick + 60))
 	add_btn.call("跳到结束", func(): _set_tick(total_ticks))
+	# 主动技(玩家手动释放): 确定性输入注入 + 重模拟
+	ui.cast_btn = Button.new()
+	ui.cast_btn.text = "🔥 震地眩晕(周围2格)"
+	ui.cast_btn.pressed.connect(_cast_active)
+	hbox.add_child(ui.cast_btn)
 	add_btn.call("← 返回铁匠铺", func():
 		get_tree().change_scene_to_file("res://scenes/forge/forge_scene.tscn"))
 	# 时间轴滑杆(重放: 拖动任意跳转)
@@ -747,8 +829,16 @@ func _process_ui() -> void:
 			var snap: Dictionary = snapshots[clampi(play_tick, 0, snapshots.size() - 1)]
 			charge = float(snap.get("__contract", {}).get("charge", 0.0))
 		ui.contract.text = "【蓄能盾击】储能 %.1f/8" % charge
+		# 主动技按钮冷却状态(契约侧 cooldown_until 驱动)
+		if sim != null and sim.contracts.has("c_quake"):
+			var cd_left := maxi(int(sim.contracts["c_quake"].cooldown_until) - play_tick, 0)
+			ui.cast_btn.disabled = cd_left > 0
+			ui.cast_btn.text = "🔥 震地眩晕(冷却 %.1fs)" % (cd_left / 20.0) if cd_left > 0 \
+				else "🔥 震地眩晕(周围2格)"
 		# 重放提示
 		ui.tip.text = "拖动下方时间轴可回看任意时刻(自动暂停);⏮/⏪/⏩ 跳跃浏览"
 	else:
 		ui.status.text = "布阵阶段: 左侧部署区 2×3 起步 · 中央空列 · 右侧敌方部署区"
 		ui.contract.text = ""
+		ui.cast_btn.text = "🔥 震地眩晕(战斗中可放)"
+		ui.cast_btn.disabled = true

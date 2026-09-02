@@ -31,7 +31,11 @@ class SimHost extends HostBase:
 
 	# ---- 查询 ----
 	func query(name: String, args: Array, ctx: Dictionary) -> Variant:
-		var t := _resolve(args[0]) if args.size() > 0 else {}
+		# 引用类参数才做实体解析;集合/数值/字符串类查询跳过(radius int 等会误炸)
+		var t: Dictionary = {}
+		if args.size() > 0 and not (name in ["units_in_range", "enemies_in_range", "all_enemies"]) \
+				and (typeof(args[0]) == TYPE_DICTIONARY or typeof(args[0]) == TYPE_STRING):
+			t = _resolve(args[0])
 		match name:
 			"blocked_damage":
 				return ctx.get("blocked_damage", 0.0)
@@ -78,6 +82,11 @@ class SimHost extends HostBase:
 				if h.is_empty():
 					return []
 				return sim.all_enemies_of(h)
+			"units_in_range":
+				var h := holder()
+				if h.is_empty():
+					return []
+				return sim.units_in_radius(h, int(args[0]))
 			"rand_range":
 				return sim.rng.rand_range(args[0], args[1])
 			"count_entities":
@@ -205,9 +214,12 @@ class SimHost extends HostBase:
 			if ref_v.is_empty():
 				return {}
 			return sim.get_entity(str(ref_v.get("id", "")))
-		if ref_v == "":
-			return {}
-		return sim.get_entity(str(ref_v))
+		if typeof(ref_v) == TYPE_STRING:
+			if ref_v == "":
+				return {}
+			return sim.get_entity(ref_v)
+		printerr("RESOLVE-BAD typeof=%d val=%s" % [typeof(ref_v), str(ref_v)])
+		return {}
 
 
 ## ---- 契约(VM + 宿主 + 触发统计) —— 顶层 = SimContract ----
@@ -216,19 +228,27 @@ var vm = null
 var host = null
 var weapon_id := ""
 var stats: Dictionary = {}
+var budget: Dictionary = {}      # 契约预算(budget.cooldown 驱动主动技冷却)
+var cooldown_until := 0          # 主动技冷却(tick)
 
 
 func _init(cid: String, ast: Dictionary, sim_holder_id: String, weapon: Dictionary, s) -> void:
 	contract_id = cid
 	weapon_id = str(weapon.get("id", cid))
+	budget = ast.get("budget", {})
 	host = SimHost.new(s, sim_holder_id, weapon)
 	vm = VM.new(ast, host)
 
 
 func on_event(event: String, ctx: Dictionary) -> Dictionary:
 	ctx["contract_id"] = contract_id
+	# 主动技冷却门控(right_click 由玩家调度触发;其余事件不门控)
+	if event == "right_click" and host.sim.tick < cooldown_until:
+		return {"triggered": false, "breached": false}
 	var res: Dictionary = vm.run_event(event, ctx)
 	if res.triggered:
+		if event == "right_click":
+			cooldown_until = host.sim.tick + int(budget.get("cooldown", 0))
 		var st: Dictionary = stats.get(event, {"count": 0, "breached": 0})
 		st.count += 1
 		if res.breached:

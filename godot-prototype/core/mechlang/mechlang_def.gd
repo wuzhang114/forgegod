@@ -92,6 +92,7 @@ const QUERY_FUNCS := {
 const COLLECTION_FUNCS := {
 	"enemies_in_range": 1,      # (radius) -> 范围内敌人实体列表
 	"all_enemies": 0,           # -> 战场全部敌人
+	"units_in_range": 1,        # (radius) -> 范围内全部实体(不分阵营,主动 AOE 用, v0.5)
 }
 
 ## ---- 事件上下文保留变量(handler 内可直接读取,由 sim 提供) ----

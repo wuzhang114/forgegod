@@ -41,6 +41,8 @@ var blocked_cells: Dictionary = {}
 var cell_effects: Dictionary = {}
 ## 延迟命中命令队列(command 化攻击调度): {hit_tick, source_id, target_id, tag, from, to}
 var pending_hits: Array = []
+## 主动技调度(确定性输入): {"tick", "cmd", "contract_id"}
+var pending_cmds: Array = []
 
 const SIM_CONTRACT := SimContract
 ## 目标粘性窗口(tick): 锁定的目标在窗口内不因距离变化而更换(原目标死亡除外)
@@ -181,6 +183,38 @@ func cmd_overload(contract_id: String) -> void:
 	input_log.append({"tick": tick, "cmd": "overload", "a": contract_id})
 
 
+## 主动技调度(玩家手动释放): 在 at_tick 触发契约 right_click
+## 确定性: 指令进入 input_log,由同 seed 重模拟可精确复现
+func schedule_active(contract_id: String, at_tick: int) -> void:
+	pending_cmds.append({"tick": maxi(at_tick, 1), "cmd": "active", "contract_id": contract_id})
+	pending_cmds.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.tick) < int(b.tick))
+	input_log.append({"tick": -1, "cmd": "active", "a": contract_id, "at": maxi(at_tick, 1)})
+
+
+## 执行到期的主动指令(在 tick_once 开头)
+func _run_scheduled() -> void:
+	if pending_cmds.is_empty():
+		return
+	for c in pending_cmds.duplicate():
+		if int(c.tick) > tick:
+			continue
+		pending_cmds.erase(c)
+		if c.cmd != "active" or not contracts.has(c.contract_id):
+			continue
+		var ct = contracts[c.contract_id]
+		var holder: Dictionary = entities.get(ct.host.holder_id, {})
+		var t := {}
+		if not holder.is_empty():
+			t = DefEntity.nearest_enemy_of(holder, entities, 99999)
+		var res: Dictionary = ct.on_event("right_click", {"target": t, "tick": tick})
+		# 事件仅在成功触发时广播(冷却门控的尝试不产生表现事件)
+		if res.triggered:
+			push_event({"kind": "active_cast", "source_id": ct.host.holder_id,
+				"contract_id": c.contract_id, "tick": tick})
+		input_log.append({"tick": tick, "cmd": "active", "a": c.contract_id})
+
+
 func cmd_retreat() -> void:
 	retreat_called = true
 	battle_result = "retreat"
@@ -228,6 +262,8 @@ func _enemy_alive() -> int:
 
 func tick_once() -> void:
 	tick += 1
+	# 主动技调度(确定性输入)在单位行动前执行
+	_run_scheduled()
 	# 实体动作与移动
 	for id in entities.keys():
 		var ent: Dictionary = entities[id]
@@ -723,6 +759,17 @@ func enemies_in_radius(center: Dictionary, radius: int) -> Array:
 	var out: Array = []
 	for e in entities.values():
 		if not e.alive or e.faction == center.faction:
+			continue
+		if Grid.dist(center.grid, e.grid) <= radius:
+			out.append({"id": e.id})
+	return out
+
+
+## 半径(格)内全部活体(不分阵营;供主动 AOE units_in_range 查询)
+func units_in_radius(center: Dictionary, radius: int) -> Array:
+	var out: Array = []
+	for e in entities.values():
+		if not e.alive:
 			continue
 		if Grid.dist(center.grid, e.grid) <= radius:
 			out.append({"id": e.id})
