@@ -30,6 +30,8 @@ static func make(id: String, kind: String, faction: String, name: String, role: 
 		"cur_target": "",              # 目标粘性: 当前锁定目标(死亡/过期才换)
 		"sticky_ticks": 0,             # 目标粘性剩余窗口(tick)
 		"statuses": {},                # status_id -> {ticks, stacks, source_id}
+		"weapon_shred": float(opt.get("weapon_shred", 0.0)),  # 武器词条破甲(锻造 trait)
+		"weapon_bonus": float(opt.get("weapon_bonus", 0.0)),  # 武器特性增伤(独立乘区,同桶加算)
 		"current_action": {},          # {tag, target_id, phase, t, windup, active, recover}
 		"atk_speed": 1.0,              # 攻速倍率(动作帧时长 = 基础 / (1 + atk_speed 增量))
 		"alive": true,

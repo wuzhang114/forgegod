@@ -333,7 +333,8 @@ func _attack_missed(e: Dictionary, a: Dictionary) -> void:
 
 ## 攻击命中结算(近战在判定窗开始时;弹道在命中 tick 被命令队列触发)
 func _resolve_hit(e: Dictionary, target: Dictionary, a: Dictionary) -> void:
-	var result := Chain.resolve_attack(_atk_source(e), target, a.tag, rng, dmg_bonus, _vulnerability_of(target), {})
+	var result := Chain.resolve_attack(_atk_source(e), target, a.tag, rng, dmg_bonus,
+		_vulnerability_of(target), _traits_of(e))
 	var damage_done: float = result.final_damage if result.landed else 0.0
 	# 契约事件(定向): attack(无论命中) -> 攻击者; block -> 格挡者; hurt -> 受击者
 	_broadcast_for(e.id, "attack", {"target": target, "attack_damage": e.atk,
@@ -768,6 +769,21 @@ func _vulnerability_of(target: Dictionary) -> float:
 	if DefEntity.has_status(target, "weak_point"):
 		v += 0.10
 	return v
+
+
+## 收集持有者所有契约的 traits(guaranteed_hit / ignores_evade / crit_mult ...)
+## —— 让 MechLang 设备特性在攻击判定中真实生效(优先级高于武器面板)
+func _traits_of(e: Dictionary) -> Dictionary:
+	var out := {}
+	if entity_contracts.has(e.id):
+		for cid in entity_contracts[e.id]:
+			var c = contracts.get(cid)
+			if c == null:
+				continue
+			var tr: Dictionary = c.get_traits()
+			for k in tr.keys():
+				out[k] = tr[k]
+	return out
 
 
 ## 攻击者输出修正(weakened -20%) -> 构造临时副本供判定链使用

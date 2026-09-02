@@ -18,6 +18,24 @@ const DAMAGE := {
 	"INDEP_MAX": 2.0,         # 独立乘区上限(1+Σ来源,加算桶;含武器词条+目标易伤)
 }
 
+## ---- 武器面板(锻造四维 -> 战斗数值) ----
+## 规则(创作者定稿): 装备增伤一律进基础攻击区(atk_mult);
+## 武器"特性增伤"进独立乘区(wbonus,与目标易伤同桶加算);契约 traits 优先级最高。
+const WEAPON := {
+	"ATK_BASE": 0.75, "ATK_PURITY": 0.50,      # atk_mult = 0.75 + 0.5·purity/100
+	"CRIT_BASE": 1.10, "CRIT_TEMPER": 0.60,    # crit_mult = 1.10 + 0.6·temper/100
+	"HIT_BASE": 0.75, "HIT_BALANCE": 0.25,     # hit = 0.75 + 0.25·balance/100
+	"HIT_FLOOR": 0.05,
+	"SHRED_START": 50.0, "SHRED_STEP": 0.02,   # shred = max(temper-50,0)·0.02(破甲)
+	"WBONUS_START": 55.0, "WBONUS_STEP": 0.60, # wbonus = max(temper-55,0)/100·0.6(独立乘区)
+	"DUR_BASE": 50.0, "DUR_STRUCTURE": 0.50,   # durability = 50 + 0.5·structure
+	"SPEED_BASE": 0.90, "SPEED_BALANCE": 0.20, # speed_mult = 0.90 + 0.20·balance/100
+	"SPEED_FLOOR": 0.50,
+	"DEFECT_HIT_PENALTY": 0.08,                # 杂质: 命中 -0.08
+	"DEFECT_DUR_FACTOR": 0.7,                  # 松散: 耐久 ×0.7
+	"DEFECT_SPEED_FACTOR": 0.85,               # 偏重: 攻速 ×0.85
+}
+
 ## ---- 动作倍率(02-battle-system-design.md §6.1) ----
 const ACTION := {
 	"basic": 1.0,

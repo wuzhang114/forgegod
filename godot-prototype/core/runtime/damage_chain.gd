@@ -18,7 +18,8 @@ static func resolve_attack(attacker: Dictionary, target: Dictionary, action_tag:
 	var action := DefAction.get_def(action_tag)
 	var atk: float = attacker.atk
 	var armor: float = target.armor
-	var shred: float = float(action.get("armor_shred", 0.0))
+	# 破甲 = 动作自带 + 武器词条(锻造 trait)
+	var shred: float = float(action.get("armor_shred", 0.0)) + float(attacker.get("weapon_shred", 0.0))
 	var base: float = atk * Bal.action_mult(action_tag)
 
 	# ---- 命中判定 ----
@@ -57,7 +58,9 @@ static func resolve_attack(attacker: Dictionary, target: Dictionary, action_tag:
 	var armor_after: float = maxf(armor - shred, 0.0)
 	var defense: float = float(Bal.DAMAGE.ARMOR_BASE) / (float(Bal.DAMAGE.ARMOR_BASE) + armor_after)
 	var bonus := clampf(dmg_bonus, 0.0, float(Bal.DAMAGE.BONUS_CAP))   # 增伤区上限
-	var indep := 1.0 + maxf(vuln, 0.0)                                 # 独立乘区(单桶加算)
+	# 独立乘区(单桶加算,含上限): 目标易伤 + 武器特性增伤(创作者规则)
+	var indep := clampf(1.0 + maxf(vuln, 0.0) + maxf(float(attacker.get("weapon_bonus", 0.0)), 0.0),
+		0.0, float(Bal.DAMAGE.INDEP_MAX))
 	var final_damage: float = base * (1.0 + bonus) * crit_tier * defense * indep
 	return {"landed": true, "blocked": false, "crit_tier": crit_tier,
 		"base": base, "final_damage": final_damage, "armor_after": armor_after,

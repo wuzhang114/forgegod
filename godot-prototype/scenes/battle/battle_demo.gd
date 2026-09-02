@@ -11,6 +11,7 @@ const DefEntity := preload("res://core/runtime/sim_entity.gd")
 const Parser := preload("res://core/mechlang/parser.gd")
 const Checker := preload("res://core/mechlang/checker.gd")
 const Grid := preload("res://core/runtime/hex_grid.gd")
+const WeaponStats := preload("res://core/forge/weapon_stats.gd")
 
 const SRC_BULWARK := """
 device 蓄能盾击 {
@@ -248,8 +249,7 @@ func _begin_battle() -> void:
 		sim.add_entity(_make_entity(e))
 	var ast := Parser.new().parse(contract_src)
 	var checked := Checker.new().check(ast.ast)
-	sim.add_contract("c_bulwark", checked.ast, "hero_1",
-		{"id": "w_1", "max_durability": 100.0, "durability": 100.0, "defects": []})
+	sim.add_contract("c_bulwark", checked.ast, "hero_1", _battle_weapon())
 	sim.run(2400)
 	total_ticks = maxi(sim.tick, 1)
 	effects = sim.events.duplicate(true)
@@ -258,8 +258,7 @@ func _begin_battle() -> void:
 	run.configure_board(_board_bounds())
 	for e in deploy_entities:
 		run.add_entity(_make_entity(e))
-	run.add_contract("c_bulwark", checked.ast, "hero_1",
-		{"id": "w_1", "max_durability": 100.0, "durability": 100.0, "defects": []})
+	run.add_contract("c_bulwark", checked.ast, "hero_1", _battle_weapon().duplicate(true))
 	snapshots = []
 	# 清理上一次战斗残留的纸片人(重开战斗时必须释放旧节点,否则幽灵残影叠加)
 	for u in unit_nodes.values():
@@ -308,8 +307,26 @@ func _make_entity(e: Dictionary) -> Dictionary:
 	var opt: Dictionary = Bal.hero_tpl(role) if is_hero else Bal.enemy_tpl(role)
 	opt = opt.duplicate()
 	opt.grid = e.grid
+	if is_hero:
+		# 队伍武器面板: 玩家锻造产物(全流程)或演示默认均衡武器
+		WeaponStats.apply_to_opt(opt, _weapon_stats())
 	return DefEntity.make(e.id, ("hero" if is_hero else "enemy"),
 		("player" if is_hero else "enemy"), e.name, role, opt)
+
+
+## 当前武器统计面板(锻造产物 -> 战斗数值;演示时用默认均衡武器)
+func _weapon_stats() -> Dictionary:
+	var Session := preload("res://core/flow/game_session.gd")
+	return WeaponStats.from_facts(Session.weapon_facts) \
+		if not Session.weapon_facts.is_empty() else WeaponStats.default_stats()
+
+
+## 契约携带的武器对象(耐久/缺陷词供 MechLang has_defect 查询)
+func _battle_weapon() -> Dictionary:
+	var ws := _weapon_stats()
+	return {"id": "w_1", "max_durability": ws.durability, "durability": ws.durability,
+		"defects": ws.defects, "atk_mult": ws.atk_mult, "crit_mult": ws.crit_mult,
+		"shred": ws.shred, "wbonus": ws.wbonus, "speed_mult": ws.speed_mult}
 
 
 ## ---------------- 播放 ----------------
@@ -697,12 +714,30 @@ func _build_ui() -> void:
 	ui.contract = Label.new()
 	ui.contract.position = Vector2(950, 42)
 	add_child(ui.contract)
+	ui.weapon = Label.new()
+	ui.weapon.position = Vector2(24, 40)
+	ui.weapon.add_theme_font_size_override("font_size", 15)
+	ui.weapon.modulate = Color(0.95, 0.85, 0.6)
+	add_child(ui.weapon)
 
 
 func _process_ui() -> void:
 	if ui.is_empty():
 		return
+	# 武器面板行(锻造产物 -> 战斗数值,始终可见)
+	var Session := preload("res://core/flow/game_session.gd")
+	var ws := _weapon_stats()
+	var wname := "演示战锤"
+	if not Session.weapon_facts.is_empty():
+		wname = str(Session.weapon_facts.get("name", "无名武器"))
+	ui.weapon.text = "武器 %s · 攻×%.2f · 暴×%.2f · 破甲+%.0f · 独立+%.0f%%" % [
+		wname, ws.atk_mult, ws.crit_mult, ws.shred * 100.0, ws.wbonus * 100.0]
 	if phase == "playing":
+		# 耐久由契约 host 侧武器对象(SimHost 扣减真实生效)
+		if sim != null and sim.contracts.has("c_bulwark"):
+			var w: Dictionary = sim.contracts["c_bulwark"].host.weapon
+			ui.weapon.text += " · 耐久 %.0f/%.0f" % [
+				float(w.get("durability", 0.0)), float(w.get("max_durability", 100.0))]
 		var st := "进行中…"
 		if play_tick >= total_ticks:
 			st = "战斗结束: " + str(sim.battle_result)
