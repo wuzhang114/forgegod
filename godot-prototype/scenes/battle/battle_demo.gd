@@ -51,6 +51,7 @@ device 震地怒涛 {
 
 const HEX_SIZE := 50.0
 const Y_SQUASH := 0.54
+const TICKS_PER_SEC := 20.0  # 模拟 20Hz;面向用户的展示一律换算成秒
 const BOARD_CENTER := Vector2(640, 430)  # 兜底;实际每张地图用 ground_y(贴地面带)
 ## 单位统一造型基准: 视觉身高/身宽(局部原点=格心,脚踩在 y=0)
 const UNIT_H := 46.0
@@ -834,7 +835,9 @@ func _process_ui() -> void:
 		var st := "进行中…"
 		if play_tick >= total_ticks:
 			st = "战斗结束: " + str(sim.battle_result) + " · 拖动时间轴回放本局"
-		ui.status.text = "tick %d/%d · %s · ×%s" % [play_tick, total_ticks, st, str(speed)]
+		# 面向用户一律用秒(内部 tick 仅实现细节)
+		ui.status.text = "时间 %s/%s 秒 · %s · ×%s" % [
+			_tick_s(play_tick), _tick_s(total_ticks), st, str(speed)]
 		var charge := 0.0
 		if not snapshots.is_empty():
 			var snap: Dictionary = snapshots[clampi(play_tick, 0, snapshots.size() - 1)]
@@ -844,7 +847,7 @@ func _process_ui() -> void:
 		if sim != null and sim.contracts.has("c_quake"):
 			var cd_left := maxi(int(sim.contracts["c_quake"].cooldown_until) - play_tick, 0)
 			ui.cast_btn.disabled = cd_left > 0
-			ui.cast_btn.text = "🔥 震地眩晕(冷却 %.1fs)" % (cd_left / 20.0) if cd_left > 0 \
+			ui.cast_btn.text = "🔥 震地眩晕(冷却 %s 秒)" % _tick_s(cd_left) if cd_left > 0 \
 				else "🔥 震地眩晕(周围2格)"
 		# 重放提示
 		ui.tip.text = "拖动下方时间轴可回看任意时刻(自动暂停);⏮/⏪/⏩ 跳跃浏览"
@@ -853,3 +856,8 @@ func _process_ui() -> void:
 		ui.contract.text = ""
 		ui.cast_btn.text = "🔥 震地眩晕(战斗中可放)"
 		ui.cast_btn.disabled = true
+
+
+## tick -> 秒(1 位小数)
+func _tick_s(t: float) -> String:
+	return "%.1f" % (t / TICKS_PER_SEC)
