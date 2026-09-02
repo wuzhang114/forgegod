@@ -1,0 +1,11 @@
+Use case: stylized-concept
+Asset type: in-game visual style test for a 2D hex-grid blacksmith adventure
+Primary request: a compact western-fantasy tactics encounter on a small oblique hexagonal board, with three simplified 2D paper-cutout heroes facing two stone golems: blue guard with shield and hammer, copper-orange duelist with long sword, moss-green ranger with short bow
+Scene/background: late-afternoon mountain forge outpost, timber workshop and anvil on one side, layered hills and a dirt road behind the board, no UI and no text
+Style/medium: one coherent pixel-art language across characters and environment: crisp hard pixel edges, shared medium pixel scale, limited color ramps, deliberate pixel clusters and sparse dithering; characters are flat layered paper-cutout silhouettes with restrained cel shading, while background uses tile-like painted pixel planes; HD-2D depth-of-field and localized light shafts add depth without blurring the pixel edges
+Composition/framing: 16:9 game screenshot, board centered, clear readable hex boundaries, characters and enemies aligned to tile centers, enough margin for HUD, strong foreground/midground/background separation
+Lighting/mood: warm late-afternoon forge glow against cool blue mountain shadows, subtle gold divine glint on one weapon, handmade, mysterious, inviting; demonstrate that the style works outside night scenes
+Color palette: muted slate blue shadows, warm ochre sunlight, ember orange, weathered wood brown, role colors blue/copper/moss, restrained divine gold
+Materials/textures: worn stone hex tiles, rough timber, hammered iron, charcoal crates, controlled pixel dithering; every surface must resolve into intentional pixel shapes rather than painterly brush strokes
+Constraints: background pixel density and edge sharpness must harmonize with the character sprites; readable at game zoom, no photorealism, no 3D render, no direct likeness of existing game characters, no logos, no watermark
+Avoid: soft painterly background, airbrushed gradients, glossy anime rendering, excessive micro-detail, dark night-only palette, blurry edges, text

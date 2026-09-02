@@ -1,8 +1,8 @@
-## 战斗播放器 v2(六边形棋盘 · 斜俯视 · 纸片人 · HD-2D 氛围)—— B3.6
+## 战斗播放器 v2(随机战场 · 左右部署 · 六边形棋盘 · HD-2D 氛围)—— B3.7
 ## 运行: godot --path godot-prototype scenes/battle/battle_demo.tscn
 ## 流程: 布阵(拖动勇者排兵)→ 开始战斗 → 离线确定性模拟 → 逐 tick 快照 → 播放(变速/暂停/跳结束)。
-## 表现: 六边形棋盘(斜俯视压扁)、纸片人(转向/攻击时绕 Y 轴翻面 + 挥击)、
-##       HD-2D 氛围(天光渐变/远山剪影/地面暖色/月夜)、事件飘字、契约 HUD。
+## 表现: 背景图只提供平整战斗地面与环境；六边形棋盘由程序后置叠加。
+##       单位左右分区(中央空列)、纸片人(转向/攻击时绕 Y 轴翻面 + 挥击)、事件飘字、契约 HUD。
 
 extends Node2D
 
@@ -35,10 +35,34 @@ device 蓄能盾击 {
 }
 """
 
-const HEX_SIZE := 44.0
-const BOARD_ORIGIN := Vector2(330, 70)
-const Y_SQUASH := 0.52
-const PLAYER_ZONE_R := 1
+const HEX_SIZE := 50.0
+const Y_SQUASH := 0.54
+const BOARD_CENTER := Vector2(640, 390)
+
+## 每张图只承担环境与平整地面，中心棋盘由 _draw_board() 叠加。
+const BATTLE_BACKGROUNDS := {
+	"forge_courtyard": preload("res://assets/battle/forge-courtyard.png"),
+	"ruined_road": preload("res://assets/battle/ruined-road.png"),
+	"crystal_mine": preload("res://assets/battle/crystal-mine.png"),
+	"autumn_shrine": preload("res://assets/battle/autumn-shrine.png"),
+}
+
+## q 是左右列，r 是上下行。每个模板都保留至少 2x3 的双方部署空间，
+## gap_q 是中央空列：棋盘会画出该列，但布阵不会把单位放入其中。
+const BATTLE_MAPS := [
+	{"id": "forge_courtyard", "label": "熔炉庭院", "q_min": 0, "q_max": 8,
+		"r_min": 0, "r_max": 4, "player_q_min": 0, "player_q_max": 2,
+		"enemy_q_min": 6, "enemy_q_max": 8, "gap_q": 4},
+	{"id": "ruined_road", "label": "断垣关道", "q_min": 0, "q_max": 7,
+		"r_min": 0, "r_max": 4, "player_q_min": 0, "player_q_max": 1,
+		"enemy_q_min": 6, "enemy_q_max": 7, "gap_q": 4},
+	{"id": "crystal_mine", "label": "蓝晶矿窟", "q_min": 0, "q_max": 6,
+		"r_min": 0, "r_max": 3, "player_q_min": 0, "player_q_max": 1,
+		"enemy_q_min": 5, "enemy_q_max": 6, "gap_q": 3},
+	{"id": "autumn_shrine", "label": "秋枫神台", "q_min": 0, "q_max": 8,
+		"r_min": 0, "r_max": 3, "player_q_min": 0, "player_q_max": 2,
+		"enemy_q_min": 6, "enemy_q_max": 8, "gap_q": 4},
+]
 
 const HERO_COLORS := {"guard": Color(0.35, 0.65, 1.0), "duelist": Color(1.0, 0.55, 0.2),
 	"ranger": Color(0.35, 0.9, 0.5)}
@@ -55,6 +79,10 @@ var total_ticks := 0
 var ui: Dictionary = {}
 var contract_src := ""          # 从 GameSession 读取的契约(若无则内置蓄能盾击)
 var contract_name := "蓄能盾击"
+var battle_map: Dictionary = {}
+var map_rng := RandomNumberGenerator.new()
+var background_texture: Texture2D
+var board_origin := BOARD_CENTER
 
 ## 布阵
 var deploy_entities: Array = []
@@ -66,8 +94,12 @@ var unit_nodes: Dictionary = {}      # eid -> UnitNode
 
 
 func _ready() -> void:
+	# 背景和单位都按最近邻采样，保留像素簇的硬边缘。
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_ready_contract()
 	_build_ui()
+	map_rng.randomize()
+	_select_battle_map()
 	_setup_deploy()
 	_process_ui()
 
@@ -86,14 +118,14 @@ func _ready_contract() -> void:
 func px_of(grid: Vector2i) -> Vector2:
 	var p := Grid.to_pixel(grid, HEX_SIZE)
 	var proj := Vector2(p.x, p.y * Y_SQUASH)
-	return BOARD_ORIGIN + proj
+	return board_origin + proj
 
 
 func pick_grid(mouse_px: Vector2) -> Vector2i:
-	var best := Vector2i(3, 0)
+	var best := Vector2i(int(battle_map.get("player_q_min", 0)), int(battle_map.get("r_min", 0)))
 	var best_d := INF
-	for q in range(8):
-		for r in range(5):
+	for q in range(int(battle_map.get("q_min", 0)), int(battle_map.get("q_max", 0)) + 1):
+		for r in range(int(battle_map.get("r_min", 0)), int(battle_map.get("r_max", 0)) + 1):
 			var c := Vector2i(q, r)
 			var d := px_of(c).distance_to(mouse_px)
 			if d < best_d:
@@ -104,15 +136,71 @@ func pick_grid(mouse_px: Vector2) -> Vector2i:
 
 ## ---------------- 布阵 ----------------
 
+func _select_battle_map(index: int = -1) -> void:
+	var map_index := index
+	if map_index < 0:
+		map_index = map_rng.randi_range(0, BATTLE_MAPS.size() - 1)
+	battle_map = BATTLE_MAPS[clampi(map_index, 0, BATTLE_MAPS.size() - 1)].duplicate(true)
+	background_texture = BATTLE_BACKGROUNDS.get(str(battle_map.id))
+	_recenter_board()
+	if ui.has("map"):
+		ui.map.text = "战场 · " + str(battle_map.label)
+
+
+func _recenter_board() -> void:
+	if battle_map.is_empty():
+		board_origin = BOARD_CENTER
+		return
+	var min_px := Grid.to_pixel(Vector2i(int(battle_map.q_min), int(battle_map.r_min)), HEX_SIZE)
+	var max_px := Grid.to_pixel(Vector2i(int(battle_map.q_max), int(battle_map.r_max)), HEX_SIZE)
+	var center := Vector2((min_px.x + max_px.x) * 0.5, (min_px.y + max_px.y) * 0.5 * Y_SQUASH)
+	board_origin = BOARD_CENTER - center
+
+
+func _board_bounds() -> Dictionary:
+	return {"q_min": int(battle_map.get("q_min", 0)), "q_max": int(battle_map.get("q_max", 7)),
+		"r_min": int(battle_map.get("r_min", 0)), "r_max": int(battle_map.get("r_max", 4))}
+
+
+func _is_player_cell(g: Vector2i) -> bool:
+	return g.x >= int(battle_map.get("player_q_min", 0)) \
+			and g.x <= int(battle_map.get("player_q_max", 0)) \
+			and g.y >= int(battle_map.get("r_min", 0)) \
+			and g.y <= int(battle_map.get("r_max", 4))
+
+
+func _is_enemy_cell(g: Vector2i) -> bool:
+	return g.x >= int(battle_map.get("enemy_q_min", 0)) \
+			and g.x <= int(battle_map.get("enemy_q_max", 0)) \
+			and g.y >= int(battle_map.get("r_min", 0)) \
+			and g.y <= int(battle_map.get("r_max", 4))
+
+
+func _is_gap_cell(g: Vector2i) -> bool:
+	return g.x == int(battle_map.get("gap_q", -999))
+
 func _setup_deploy() -> void:
+	if battle_map.is_empty():
+		_select_battle_map(0)
+	var pq := int(battle_map.player_q_min)
+	var eq := int(battle_map.enemy_q_min)
+	var r_min := int(battle_map.r_min)
+	var r_max := int(battle_map.r_max)
+	var r_mid := floori(float(r_min + r_max) / 2.0)
 	deploy_entities = [
-		{"id": "hero_1", "role": "guard", "name": "守卫·布兰特", "grid": Vector2i(3, 0)},
-		{"id": "hero_2", "role": "duelist", "name": "连击手·莉娅", "grid": Vector2i(5, 0)},
-		{"id": "hero_3", "role": "ranger", "name": "射手·锡拉", "grid": Vector2i(1, 0)},
+		# 默认 2 前排 + 1 后排，全部落在左侧 2x3 部署区内。
+		{"id": "hero_1", "role": "guard", "name": "守卫·布兰特", "grid": Vector2i(pq + 1, r_mid)},
+		{"id": "hero_2", "role": "duelist", "name": "连击手·莉娅", "grid": Vector2i(pq, r_mid)},
+		{"id": "hero_3", "role": "ranger", "name": "射手·锡拉", "grid": Vector2i(pq, r_min)},
 	]
-	for i in 5:
+	var enemy_cells := [
+		Vector2i(eq, r_min), Vector2i(eq + 1, r_min),
+		Vector2i(eq, r_mid), Vector2i(eq + 1, r_mid),
+		Vector2i(eq + 1, r_max),
+	]
+	for i in enemy_cells.size():
 		deploy_entities.append({"id": "enemy_%d" % (i + 1), "role": "brute",
-			"name": "石甲傀儡 %d" % (i + 1), "grid": Vector2i(i, 4)})
+			"name": "石甲傀儡 %d" % (i + 1), "grid": enemy_cells[i]})
 	phase = "deploy"
 
 
@@ -123,7 +211,7 @@ func _input(event: InputEvent) -> void:
 		if drag_index >= 0:
 			var e: Dictionary = deploy_entities[drag_index]
 			var g := pick_grid(get_viewport().get_mouse_position())
-			if g.y <= PLAYER_ZONE_R and not _deploy_occupied(g):
+			if _is_player_cell(g) and not _is_gap_cell(g) and not _deploy_occupied(g):
 				e.grid = g
 			drag_index = -1
 			queue_redraw()
@@ -150,6 +238,7 @@ func _deploy_occupied(g: Vector2i) -> bool:
 
 func _begin_battle() -> void:
 	sim = BattleSim.new(7)
+	sim.configure_board(_board_bounds())
 	for e in deploy_entities:
 		sim.add_entity(_make_entity(e))
 	var ast := Parser.new().parse(contract_src)
@@ -161,6 +250,7 @@ func _begin_battle() -> void:
 	effects = sim.events.duplicate(true)
 	# 快照重放(末尾一条为"结算收尾"状态: 存活单位回到站姿)
 	var run := BattleSim.new(7)
+	run.configure_board(_board_bounds())
 	for e in deploy_entities:
 		run.add_entity(_make_entity(e))
 	run.add_contract("c_bulwark", checked.ast, "hero_1",
@@ -172,13 +262,13 @@ func _begin_battle() -> void:
 		snapshots.append(_snap_of(run))
 	run._settle_all()
 	snapshots.append(_snap_of(run))
-	# 创建纸片人
+	# 创建纸片人(guard 使用精灵素材,其余程序绘制)
 	for eid in snapshots[0].keys():
 		if eid.begins_with("__"):
 			continue
 		var role: String = snapshots[0][eid].get("role", "")
 		var col: Color = HERO_COLORS.get(role, ENEMY_COLOR)
-		var u = UnitNode.new(eid, col, px_of(snapshots[0][eid].grid))
+		var u = UnitNode.new(eid, col, px_of(snapshots[0][eid].grid), _sprite_for(eid, role))
 		add_child(u)
 		unit_nodes[eid] = u
 	# 时间轴范围 = 实际战斗长度
@@ -282,11 +372,11 @@ func _add_effect(ev: Dictionary) -> void:
 
 func _px_of_eid(eid: String) -> Vector2:
 	if snapshots.is_empty():
-		return BOARD_ORIGIN
+		return board_origin
 	var snap: Dictionary = snapshots[clampi(play_tick, 0, snapshots.size() - 1)]
 	var e: Dictionary = snap.get(eid, {})
 	if e.is_empty():
-		return BOARD_ORIGIN
+		return board_origin
 	return px_of(e.grid)
 
 
@@ -313,50 +403,51 @@ func _draw() -> void:
 
 
 func _draw_hd2d_bg() -> void:
-	# 夜云天光渐变
-	draw_rect(Rect2(Vector2.ZERO, Vector2(1280, 720)), Color(0.08, 0.06, 0.12))
-	for i in 12:
-		var t := float(i) / 12.0
-		var c := Color(0.12, 0.1, 0.2).lerp(Color(0.24, 0.17, 0.12), t)
-		draw_rect(Rect2(Vector2(0, 40 + i * 50), Vector2(1280, 50)), c)
-	# 远山剪影
-	var heights := [230.0, 195.0, 245.0, 185.0, 220.0, 205.0, 235.0, 210.0]
-	var pts := PackedVector2Array([Vector2(0, 40)])
-	var x := 0.0
-	var idx := 0
-	while x < 1290.0:
-		pts.append(Vector2(x, heights[idx % heights.size()]))
-		x += 170.0
-		idx += 1
-	pts.append(Vector2(1290, 40))
-	pts.append(Vector2(1290, 260))
-	pts.append(Vector2(0, 260))
-	draw_colored_polygon(pts, Color(0.1, 0.08, 0.15, 0.95))
-	# 地面暖色
-	draw_rect(Rect2(Vector2(0, 240), Vector2(1280, 480)), Color(0.18, 0.14, 0.11))
-	# 月亮与光晕
-	draw_circle(Vector2(1080, 84), 30.0, Color(0.92, 0.9, 0.78, 0.12))
-	draw_circle(Vector2(1080, 84), 20.0, Color(0.94, 0.92, 0.8, 0.9))
-	# 前景暗角
-	for i in 5:
-		draw_rect(Rect2(Vector2(0, 0), Vector2(1280, 14 + i * 7)), Color(0.0, 0.0, 0.0, 0.14))
+	if background_texture:
+		# 生成素材为 3:2，采用 cover 裁切填满 16:9 视口，避免横向拉伸。
+		var viewport_size := Vector2(1280, 720)
+		var texture_size := Vector2(background_texture.get_size())
+		var scale := maxf(viewport_size.x / texture_size.x, viewport_size.y / texture_size.y)
+		var draw_size := texture_size * scale
+		var draw_pos := (viewport_size - draw_size) * 0.5
+		draw_texture_rect(background_texture, Rect2(draw_pos, draw_size), false,
+			Color(1.0, 1.0, 1.0, 0.92))
+	else:
+		# 资源缺失时保留一个不影响布局的平整地面兜底。
+		draw_rect(Rect2(Vector2.ZERO, Vector2(1280, 720)), Color(0.12, 0.1, 0.12))
+		draw_rect(Rect2(Vector2(0, 250), Vector2(1280, 470)), Color(0.24, 0.19, 0.14))
 
 
 func _draw_board() -> void:
-	draw_rect(Rect2(BOARD_ORIGIN - Vector2(70, 50), Vector2(800, 330)), Color(0.22, 0.17, 0.13), true)
-	draw_rect(Rect2(BOARD_ORIGIN - Vector2(70, 50), Vector2(800, 330)), Color(0.55, 0.45, 0.3, 0.8), false, 2.0)
-	for q in range(8):
-		for r in range(5):
+	var min_p := Vector2(INF, INF)
+	var max_p := Vector2(-INF, -INF)
+	for q in range(int(battle_map.get("q_min", 0)), int(battle_map.get("q_max", 7)) + 1):
+		for r in range(int(battle_map.get("r_min", 0)), int(battle_map.get("r_max", 4)) + 1):
+			var cell_p := px_of(Vector2i(q, r))
+			min_p = min_p.min(cell_p)
+			max_p = max_p.max(cell_p)
+	var board_rect := Rect2(min_p - Vector2(HEX_SIZE, HEX_SIZE * 0.75),
+			max_p - min_p + Vector2(HEX_SIZE * 2.0, HEX_SIZE * 1.5))
+	draw_rect(board_rect, Color(0.04, 0.04, 0.05, 0.28), true)
+	draw_rect(board_rect, Color(0.95, 0.78, 0.42, 0.36), false, 2.0)
+	for q in range(int(battle_map.get("q_min", 0)), int(battle_map.get("q_max", 7)) + 1):
+		for r in range(int(battle_map.get("r_min", 0)), int(battle_map.get("r_max", 4)) + 1):
 			var c := Vector2i(q, r)
 			var p := px_of(c)
 			var pts := _hex_pts(p)
-			var base := Color(0.3, 0.24, 0.16) if (q + r) % 2 == 0 else Color(0.27, 0.22, 0.15)
-			if r <= PLAYER_ZONE_R:
-				base = base.lightened(0.06)
-			elif r >= 3:
-				base = base.darkened(0.05)
+			var base := Color(0.33, 0.28, 0.22, 0.48) if (q + r) % 2 == 0 \
+				else Color(0.27, 0.24, 0.2, 0.48)
+			if _is_player_cell(c):
+				base = Color(0.22, 0.42, 0.65, 0.42)
+			elif _is_enemy_cell(c):
+				base = Color(0.58, 0.27, 0.25, 0.42)
+			elif _is_gap_cell(c):
+				base = Color(0.16, 0.15, 0.16, 0.32)
 			draw_colored_polygon(pts, base)
-			draw_polyline(pts, Color(0.6, 0.5, 0.36, 0.4), 1.0)
+			var edge := Color(0.7, 0.82, 0.95, 0.56) if _is_player_cell(c) \
+				else Color(0.95, 0.62, 0.52, 0.56) if _is_enemy_cell(c) \
+				else Color(0.76, 0.7, 0.58, 0.32)
+			draw_polyline(pts, edge, 1.0)
 
 
 func _hex_pts(p: Vector2) -> PackedVector2Array:
@@ -379,6 +470,18 @@ func _draw_deploy_units() -> void:
 		draw_rect(Rect2(p + Vector2(-10, -8), Vector2(20, 22)), Color(0, 0, 0, 0.5), false, 1.0)
 
 
+## 角色精灵素材(守卫已接入;后续可按角色扩充)
+const SPRITES := {
+	"guard": preload("res://assets/battle/hero-guard.png"),
+}
+
+
+func _sprite_for(eid: String, role: String) -> Texture2D:
+	if eid.begins_with("hero_") and SPRITES.has(role):
+		return SPRITES[role]
+	return null
+
+
 ## ---------------- 纸片人单位节点 ----------------
 
 class UnitNode:
@@ -393,10 +496,12 @@ class UnitNode:
 	var tag := ""
 	var alive := true
 	var bob := 0.0
+	var texture: Texture2D = null
 
-	func _init(id: String, c: Color, p: Vector2) -> void:
+	func _init(id: String, c: Color, p: Vector2, tex: Texture2D = null) -> void:
 		eid = id
 		color = c
+		texture = tex
 		z_index = 10
 		position = p
 
@@ -443,25 +548,34 @@ class UnitNode:
 			rot = sin(Time.get_ticks_msec() * 0.03) * 0.35
 		elif phase == "windup":
 			rot = -0.15
-		# (纸片阵列绘制)
+		# (纸片阵列绘制: 有精灵素材时绘制贴图, 否则程序绘制)
 		draw_set_transform(Vector2(0, base_y), rot, Vector2.ONE)
-		# 头
-		draw_circle(Vector2(0, -18), 6.5, color.darkened(0.15))
-		# 身体
-		var h := 22.0
-		if phase == "windup":
-			h = 18.0
-		elif phase == "active":
-			h = 26.0
-		draw_rect(Rect2(Vector2(-9, -11), Vector2(18, h)), color)
-		draw_rect(Rect2(Vector2(-9, -11), Vector2(18, h)), Color(0, 0, 0, 0.5), false, 1.0)
-		# 武器(朝向侧)
-		var wx := 10.0 * facing
-		draw_line(Vector2(wx, -2), Vector2(wx + 14 * facing, -8), Color(0.85, 0.8, 0.7), 2.5)
-		if phase == "active":
-			draw_line(Vector2(wx + 14 * facing, -8), Vector2(wx + 20 * facing, 6), Color(1.0, 0.85, 0.4), 2.0)
+		if texture != null:
+			var tsize := Vector2(texture.get_size())
+			var target_h := 52.0
+			var target_w := tsize.x * (target_h / tsize.y)
+			draw_texture_rect(texture, Rect2(Vector2(-target_w / 2.0, -target_h), Vector2(target_w, target_h)), false)
+			# 攻击挥击流光
+			if phase == "active":
+				draw_line(Vector2(12 * facing, -14), Vector2(26 * facing, 2), Color(1.0, 0.85, 0.4), 2.0)
+		else:
+			# 头
+			draw_circle(Vector2(0, -18), 6.5, color.darkened(0.15))
+			# 身体
+			var h := 22.0
+			if phase == "windup":
+				h = 18.0
+			elif phase == "active":
+				h = 26.0
+			draw_rect(Rect2(Vector2(-9, -11), Vector2(18, h)), color)
+			draw_rect(Rect2(Vector2(-9, -11), Vector2(18, h)), Color(0, 0, 0, 0.5), false, 1.0)
+			# 武器(朝向侧)
+			var wx := 10.0 * facing
+			draw_line(Vector2(wx, -2), Vector2(wx + 14 * facing, -8), Color(0.85, 0.8, 0.7), 2.5)
+			if phase == "active":
+				draw_line(Vector2(wx + 14 * facing, -8), Vector2(wx + 20 * facing, 6), Color(1.0, 0.85, 0.4), 2.0)
 		if tag == "block" and phase == "active":
-			draw_circle(Vector2(wx, -10), 9.0, Color(0.6, 0.85, 1.0, 0.5))
+			draw_circle(Vector2(12 * facing, -10), 9.0, Color(0.6, 0.85, 1.0, 0.5))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		# 血条(不随体摆动)
 		draw_rect(Rect2(Vector2(-15, -32), Vector2(30, 4)), Color(0.1, 0.08, 0.1))
@@ -485,6 +599,11 @@ func _build_ui() -> void:
 		b.pressed.connect(cb)
 		hbox.add_child(b)
 	add_btn.call("开始战斗", _begin_battle)
+	add_btn.call("随机换战场", func():
+		if phase == "deploy":
+			_select_battle_map()
+			_setup_deploy()
+			queue_redraw())
 	add_btn.call("0.5×", func(): speed = 0.5)
 	add_btn.call("1×", func(): speed = 1.0)
 	add_btn.call("2×", func(): speed = 2.0)
@@ -511,16 +630,21 @@ func _build_ui() -> void:
 	ui.status.position = Vector2(24, 605)
 	add_child(ui.status)
 	ui.tip = Label.new()
-	ui.tip.text = "布阵阶段: 拖动勇者到玩家区(下方两行)调整站位,点击[开始战斗]"
+	ui.tip.text = "布阵阶段: 拖动勇者到左侧蓝区，中央列留空"
 	ui.tip.position = Vector2(24, 583)
 	ui.tip.modulate = Color(0.85, 0.85, 0.85)
 	add_child(ui.tip)
 	ui.title = Label.new()
-	ui.title.text = "B3.6 六边形棋盘·HD-2D 夜战演示 —— 守卫·布兰特 | 连击手·莉娅 | 射手·锡拉 vs 石甲傀儡×5"
+	ui.title.text = "B3.7 随机战场 · 左右部署 · 自走棋战斗"
 	ui.title.position = Vector2(24, 12)
 	add_child(ui.title)
+	ui.map = Label.new()
+	ui.map.position = Vector2(1030, 14)
+	ui.map.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ui.map.custom_minimum_size = Vector2(220, 24)
+	add_child(ui.map)
 	ui.contract = Label.new()
-	ui.contract.position = Vector2(950, 36)
+	ui.contract.position = Vector2(950, 42)
 	add_child(ui.contract)
 
 
@@ -540,5 +664,5 @@ func _process_ui() -> void:
 		# 重放提示
 		ui.tip.text = "拖动下方时间轴可回看任意时刻(自动暂停);⏮/⏪/⏩ 跳跃浏览"
 	else:
-		ui.status.text = "布阵阶段: 拖动勇者到玩家区(下方两行),点击[开始战斗]"
+		ui.status.text = "布阵阶段: 左侧部署区 2×3 起步 · 中央空列 · 右侧敌方部署区"
 		ui.contract.text = ""

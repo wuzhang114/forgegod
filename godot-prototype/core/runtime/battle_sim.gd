@@ -9,7 +9,7 @@ const Chain := preload("res://core/runtime/damage_chain.gd")
 const SimContract := preload("res://core/runtime/sim_contract.gd")
 const Grid := preload("res://core/runtime/hex_grid.gd")
 
-## 棋盘边界(axial 矩形): q 0..7, r 0..4; 玩家侧 r<=1, 敌侧 r>=3, 中立 r==2
+## 默认棋盘边界(axial 矩形)。表现层可用 configure_board() 为随机战场覆盖边界。
 const BOARD_Q_MIN := 0
 const BOARD_Q_MAX := 7
 const BOARD_R_MIN := 0
@@ -32,12 +32,35 @@ var rng = null
 var dmg_bonus := 0.0
 var battle_result := ""              # "" | player_win | enemy_win | retreat
 var retreat_called := false
+var board_q_min := BOARD_Q_MIN
+var board_q_max := BOARD_Q_MAX
+var board_r_min := BOARD_R_MIN
+var board_r_max := BOARD_R_MAX
+var blocked_cells: Dictionary = {}
 
 const SIM_CONTRACT := SimContract
 
 
 func _init(seed_value: int = 1) -> void:
 	rng = preload("res://core/runtime/rng.gd").new(seed_value)
+
+
+## 配置本场战场边界。未配置时沿用原有 8x5 棋盘，保证旧测试与战斗规则不变。
+## bounds: {q_min, q_max, r_min, r_max, blocked?}；blocked 可传 Vector2i 数组。
+func configure_board(bounds: Dictionary) -> void:
+	board_q_min = int(bounds.get("q_min", BOARD_Q_MIN))
+	board_q_max = int(bounds.get("q_max", BOARD_Q_MAX))
+	board_r_min = int(bounds.get("r_min", BOARD_R_MIN))
+	board_r_max = int(bounds.get("r_max", BOARD_R_MAX))
+	blocked_cells.clear()
+	for cell in bounds.get("blocked", []):
+		if cell is Vector2i:
+			blocked_cells[cell] = true
+
+
+func is_inside_board(c: Vector2i) -> bool:
+	return c.x >= board_q_min and c.x <= board_q_max \
+			and c.y >= board_r_min and c.y <= board_r_max
 
 
 ## ---------------- 实体与注册 ----------------
@@ -373,6 +396,8 @@ func _step_away(e: Dictionary, foes: Dictionary, interval: int) -> void:
 
 
 func _cell_free(c: Vector2i) -> bool:
+	if not is_inside_board(c) or blocked_cells.has(c):
+		return false
 	for other in entities.values():
 		if other.alive and other.grid == c:
 			return false

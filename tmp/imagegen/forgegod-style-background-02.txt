@@ -1,0 +1,11 @@
+Use case: stylized-concept
+Asset type: environment style exploration for a 2D western-fantasy blacksmith adventure
+Primary request: a warmly lit blacksmith workshop courtyard in late afternoon, showing a hand-built forge, iron anvil, timber beams, stacked charcoal, mineral crates, a small well, and a path leading toward layered hills
+Scene/background: oblique three-quarter environment composition suitable for a game screen, painted pixel-art architecture and props, clear foreground/midground/background separation, no characters and no UI
+Style/medium: 16-bit-inspired painted pixel background with handcrafted JRPG environment detail, crisp tile-like edges, restrained pixel clusters, layered 2D planes, subtle atmospheric perspective, HD-2D presentation with depth-of-field and localized light shafts; evoke classic HD-2D role-playing backgrounds and detailed Chinese wuxia-fantasy game scenery without copying a specific game asset
+Composition/framing: 16:9 wide establishing shot, forge and anvil on the left third, open readable space on the right for gameplay or UI, eye-level oblique view, strong silhouette against the sky
+Lighting/mood: late-afternoon amber sunlight, cool blue shadows, soft volumetric rays around the forge smoke, calm handmade mystery and warmth; clearly not a night-only palette
+Color palette: warm brass, ember orange, weathered wood brown, sage green, slate blue shadow, muted red cloth accents
+Materials/textures: rough timber, hammered iron, soot, chipped plaster, worn stone, painted tile patterns, subtle paper-grain texture
+Constraints: game-ready environment concept, coherent scale, no photorealism, no 3D render, no logos, no watermark, no text
+Avoid: dark night sky, neon colors, glossy modern surfaces, excessive clutter, hard gradients, blurry edges, text

@@ -1,0 +1,11 @@
+Use case: stylized-concept
+Asset type: background plate for a 2D auto-battler tactics game
+Primary request: an abandoned crystal mine chamber converted into a battle arena, with a broad flat stone floor in the center, mine supports and carts along the outer walls, glowing mineral veins and a tunnel opening in the far background
+Scene/background: wide oblique three-quarter view, central floor uninterrupted and large enough for opposing deployment zones, props and crystals restricted to the edges, no characters, no enemies, no hexagons, no grid, no UI, no text
+Style/medium: handcrafted 16-bit pixel-art environment, consistent pixel density from foreground props to background rock, crisp hard pixel edges, limited color ramps, controlled emissive pixel clusters, HD-2D layered depth and subtle local glow without airbrushed gradients
+Composition/framing: 16:9 game background plate with a calm readable center, clear left and right sides, a distinct empty central lane for later board overlay
+Lighting/mood: cool cave blue with warm orange lanterns and restrained turquoise crystal glow, mysterious but cozy
+Color palette: deep slate blue, iron gray, charcoal, warm lantern amber, restrained turquoise, small divine gold accents
+Materials/textures: rough rock, timber beams, iron rails, dusty carts, faceted crystals, deliberate pixel dithering
+Constraints: central floor must be flat, continuous, and free of crystals or objects; no hexagonal motifs or tactical grid; no photorealism, no 3D render, no logos, no watermark
+Avoid: hexagons, checkerboard, isometric tile outlines, cluttered center, characters, enemies, text, soft gradients, blurry edges

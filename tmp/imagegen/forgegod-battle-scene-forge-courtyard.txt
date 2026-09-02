@@ -1,0 +1,11 @@
+Use case: stylized-concept
+Asset type: background plate for a 2D auto-battler tactics game
+Primary request: a western-fantasy blacksmith outpost courtyard prepared as a battle arena, with a large naturally flat packed-earth and worn-stone floor through the center, forge and anvil on the far left, timber workshop behind it, low fences and stacked charcoal at the edges, distant hills beyond
+Scene/background: wide oblique three-quarter view, clear open central floor from left to right, environment props pushed toward the outer edges, no characters, no enemies, no hexagons, no grid, no UI, no text
+Style/medium: handcrafted 16-bit pixel-art environment with the same pixel scale across foreground and background, crisp hard pixel edges, limited color ramps, deliberate pixel clusters, subtle HD-2D depth-of-field only in distant layers, painted tile-like planes but no smooth digital brushwork
+Composition/framing: 16:9 game background plate, central floor kept visually calm and readable for later unit sprites and a programmatic board overlay; leave enough empty floor for two opposing 2x3 deployment blocks with a clear one-column gap between them
+Lighting/mood: late-afternoon amber forge light against cool blue shadows, warm and mysterious but inviting
+Color palette: weathered wood brown, soot charcoal, muted ochre, ember orange, sage green, slate-blue distant shadows
+Materials/textures: rough timber, worn stone, packed earth, hammered iron, charcoal crates, sparse pixel dithering
+Constraints: central floor must be flat and unobstructed; no platform steps, no pits, no bridges crossing the center, no hexagonal markings; no photorealism, no 3D render, no logos, no watermark
+Avoid: hexagon shapes, checkerboard, tactical grid, isometric tile outlines, characters, enemies, text, soft painterly gradients, blurry edges, neon
