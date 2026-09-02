@@ -27,6 +27,8 @@ static func make(id: String, kind: String, faction: String, name: String, role: 
 		"move_t": 0,                                  # 移动累积 tick
 		"focus_target": "",            # 集火倾向(指令)
 		"focus_manual": false,         # 指令是否手动设置(受击转火不覆盖手动指令)
+		"cur_target": "",              # 目标粘性: 当前锁定目标(死亡/过期才换)
+		"sticky_ticks": 0,             # 目标粘性剩余窗口(tick)
 		"statuses": {},                # status_id -> {ticks, stacks, source_id}
 		"current_action": {},          # {tag, target_id, phase, t, windup, active, recover}
 		"atk_speed": 1.0,              # 攻速倍率(动作帧时长 = 基础 / (1 + atk_speed 增量))

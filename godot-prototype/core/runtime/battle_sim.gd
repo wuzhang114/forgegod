@@ -41,6 +41,8 @@ var blocked_cells: Dictionary = {}
 var cell_effects: Dictionary = {}
 
 const SIM_CONTRACT := SimContract
+## 目标粘性窗口(tick): 锁定的目标在窗口内不因距离变化而更换(原目标死亡除外)
+const TARGET_STICKY_TICKS := 60
 
 
 func _init(seed_value: int = 1) -> void:
@@ -374,6 +376,9 @@ func mechanic_damage(source_id: String, target: Dictionary, dmg_type: String, am
 ## ---------------- 移动 ----------------
 
 func _move_toward_target(e: Dictionary) -> void:
+	# 粘性窗口每 tick 递减(攻击/移动中均生效;重锁定时刷新)
+	if int(e.get("sticky_ticks", 0)) > 0:
+		e.sticky_ticks = int(e.sticky_ticks) - 1
 	if not e.alive:
 		return
 	if not e.current_action.is_empty():
@@ -389,11 +394,10 @@ func _move_toward_target(e: Dictionary) -> void:
 		return
 	if foes.is_empty():
 		return
-	# 射程外才需要移动(射程按格)
-	var target_id: String = e.get("focus_target", "")
-	if target_id.is_empty() or not entities.has(target_id) or not entities[target_id].alive:
-		target_id = foes.id
-	var target: Dictionary = entities[target_id]
+	# 移动目标: 粘性目标优先(不再每 tick 重算最近敌,避免目标摇摆)
+	var target: Dictionary = _move_target_of(e)
+	if target.is_empty():
+		return
 	var d := Grid.dist(e.grid, target.grid)
 	if d <= int(e.range_hex):
 		return
@@ -540,13 +544,33 @@ func _taunt_source_of(e: Dictionary) -> String:
 	return ""
 
 
-## 目标选择: 集火倾向 -> 距离最近敌
+## 目标选择: 集火倾向 -> 目标粘性(cur_target,窗口内锁定) -> 距离最近敌
 func _pick_target(e: Dictionary) -> String:
 	var focus_id: String = e.get("focus_target", "")
 	if not focus_id.is_empty() and entities.has(focus_id) and entities[focus_id].alive:
+		e.cur_target = focus_id
+		e.sticky_ticks = TARGET_STICKY_TICKS
 		return focus_id
+	var ct: String = e.get("cur_target", "")
+	if not ct.is_empty() and entities.has(ct) and entities[ct].alive \
+			and int(e.get("sticky_ticks", 0)) > 0:
+		return ct
 	var t := DefEntity.nearest_enemy_of(e, entities, 99999)
-	return t.get("id", "")
+	var tid: String = t.get("id", "")
+	if not tid.is_empty():
+		e.cur_target = tid
+		e.sticky_ticks = TARGET_STICKY_TICKS
+	else:
+		e.cur_target = ""
+	return tid
+
+
+## 朝当前粘性目标移动;无有效粘性目标时退回 focus/最近敌并重新锁定
+func _move_target_of(e: Dictionary) -> Dictionary:
+	var ct: String = e.get("cur_target", "")
+	if not ct.is_empty() and entities.has(ct) and entities[ct].alive:
+		return entities[ct]
+	return get_focus_or_nearest(e)
 
 
 func get_focus_or_nearest(e: Dictionary) -> Dictionary:
