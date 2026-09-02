@@ -87,6 +87,14 @@ class SimHost extends HostBase:
 				if h.is_empty():
 					return []
 				return sim.units_in_radius(h, int(args[0]))
+			"scorched_units":
+				var cell: Dictionary = weapon_state.get("scorch_cell", {})
+				if cell.is_empty():
+					return []
+				var h := holder()
+				if h.is_empty():
+					return []
+				return sim.units_on_cell(Vector2i(int(cell.q), int(cell.r)), h.faction)
 			"rand_range":
 				return sim.rng.rand_range(args[0], args[1])
 			"count_entities":
@@ -196,6 +204,10 @@ class SimHost extends HostBase:
 				sim.spawn_beam(holder_id, int(args[0]), float(args[1]))
 			"create_wall":
 				sim.create_wall(holder_id, float(args[0]), int(args[1]))
+			"scorch":
+				var cell: Vector2i = sim.scorch_cell(holder_id, int(args[0]))
+				if cell.x != -999:
+					weapon_state["scorch_cell"] = {"q": cell.x, "r": cell.y}
 		return null
 
 	func count_entities() -> int:

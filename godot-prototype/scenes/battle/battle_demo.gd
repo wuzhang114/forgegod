@@ -49,6 +49,27 @@ device 震地怒涛 {
 }
 """
 
+const SRC_SCORCH := """
+device 灼烧之种 {
+  auth: item
+  traits: { guaranteed_hit: true }
+  budget: { entities: 12, steps: 24, cooldown: 240 }
+  state: { lit: 0 }
+  on right_click {
+    scorch(120)
+    lit = 1
+  }
+  on timer {
+    if lit == 1 {
+      for e in scorched_units() {
+        damage(e, "fire", 4)
+        apply_status(e, "burning", 60)
+      }
+    }
+  }
+}
+"""
+
 const HEX_SIZE := 50.0
 const Y_SQUASH := 0.54
 const TICKS_PER_SEC := 20.0  # 模拟 20Hz;面向用户的展示一律换算成秒
@@ -102,6 +123,8 @@ var battle_map: Dictionary = {}
 var map_rng := RandomNumberGenerator.new()
 var background_texture: Texture2D
 var board_origin := BOARD_CENTER
+## 玩家主动技输入累积(确定性): [{cid, at}] —— 每次重模拟整体注入,先放的技能不丢失
+var skill_log: Array = []
 
 ## 布阵
 var deploy_entities: Array = []
@@ -257,11 +280,12 @@ func _deploy_occupied(g: Vector2i) -> bool:
 
 
 func _begin_battle() -> void:
-	_run_battle(-1)
+	skill_log = []
+	_run_battle(skill_log)
 
 
-## 构造并运行一场战斗;active_at >= 0 时在指定 tick 注入玩家主动技(确定性重模拟)
-func _run_battle(active_at: int) -> void:
+## 构造并运行一场战斗;skill_entries = [{cid, at}] 玩家主动技输入(确定性重模拟)
+func _run_battle(skill_entries: Array) -> void:
 	sim = BattleSim.new(7)
 	sim.configure_board(_board_bounds())
 	for e in deploy_entities:
@@ -270,12 +294,15 @@ func _run_battle(active_at: int) -> void:
 	var checked := Checker.new().check(ast.ast)
 	var qast := Parser.new().parse(SRC_QUAKE)
 	var qchecked := Checker.new().check(qast.ast)
-	# 两个契约共享同一武器对象: 任一契约扣耐久,UI 与另一契约都能读到(用户可见)
+	var sast := Parser.new().parse(SRC_SCORCH)
+	var schecked := Checker.new().check(sast.ast)
+	# 多个契约共享同一武器对象: 任一契约扣耐久,UI 与另一契约都能读到(用户可见)
 	var weapon := _battle_weapon()
 	sim.add_contract("c_bulwark", checked.ast, "hero_1", weapon)
 	sim.add_contract("c_quake", qchecked.ast, "hero_1", weapon)
-	if active_at >= 0:
-		sim.schedule_active("c_quake", active_at)
+	sim.add_contract("c_scorch", schecked.ast, "hero_3", weapon)
+	for entry in skill_entries:
+		sim.schedule_active(str(entry.cid), int(entry.at))
 	sim.run(2400)
 	total_ticks = maxi(sim.tick, 1)
 	effects = sim.events.duplicate(true)
@@ -288,8 +315,9 @@ func _run_battle(active_at: int) -> void:
 	var weapon_run := _battle_weapon()
 	run.add_contract("c_bulwark", checked.ast, "hero_1", weapon_run)
 	run.add_contract("c_quake", qchecked.ast, "hero_1", weapon_run)
-	if active_at >= 0:
-		run.schedule_active("c_quake", active_at)
+	run.add_contract("c_scorch", schecked.ast, "hero_3", weapon_run)
+	for entry in skill_entries:
+		run.schedule_active(str(entry.cid), int(entry.at))
 	snapshots = []
 	# 清理上一次战斗残留的纸片人(重开战斗时必须释放旧节点,否则幽灵残影叠加)
 	for u in unit_nodes.values():
@@ -329,6 +357,10 @@ func _snap_of(run_) -> Dictionary:
 	snap["__contract"] = {}
 	if run_.contracts.has("c_bulwark"):
 		snap["__contract"]["charge"] = float(run_.contracts["c_bulwark"].vm.get_state().get("charge", 0.0))
+	# 格效果(灼烧格等)进快照: 回放与第一遍表现一致
+	snap["__cells"] = []
+	for fx2 in run_.cell_effects.values():
+		snap["__cells"].append({"cell": fx2.cell, "kind": fx2.kind})
 	return snap
 
 
@@ -388,16 +420,18 @@ func _set_tick(t: int) -> void:
 	_dispatch_effects(play_tick)
 
 
-## 玩家手动释放主动技(震地怒涛): 以当前播放点为输入,注入 right_click 指令并确定性重模拟。
+## 玩家手动释放主动技(cid): 以当前播放点为输入,注入 right_click 指令并确定性重模拟。
 ## 第一遍 = 纯实时战斗: 施放后原地续播(不闪回、不暂停),技能立即生效;
 ## 战斗结束后进入回放模式(时间轴可自由拖动回看本局)。
-func _cast_active() -> void:
+func _cast_active(cid: String) -> void:
 	if phase != "playing" or play_tick >= total_ticks:
 		return
-	if sim == null or not sim.contracts.has("c_quake"):
+	if sim == null or not sim.contracts.has(cid):
 		return
 	var cast_at := maxi(play_tick, 1)
-	_run_battle(cast_at)
+	# 输入累积: 保留此前已施放的所有技能,本场时间线保持一致
+	skill_log.append({"cid": cid, "at": cast_at})
+	_run_battle(skill_log)
 	_set_tick(cast_at)
 	paused = false
 	_acc = 0.0
@@ -536,8 +570,31 @@ func _float(pos: Vector2, text: String, color: Color) -> void:
 func _draw() -> void:
 	_draw_hd2d_bg()
 	_draw_board()
+	_draw_cell_effects()
 	if phase == "deploy":
 		_draw_deploy_units()
+
+
+## 格效果视觉(当前快照): 灼烧格 = 橙色地面 + 跳动火苗(重放一致)
+func _draw_cell_effects() -> void:
+	if snapshots.is_empty():
+		return
+	var snap: Dictionary = snapshots[clampi(play_tick, 0, snapshots.size() - 1)]
+	for fx in snap.get("__cells", []):
+		if str(fx.get("kind", "")) != "burning_ground":
+			continue
+		var p := px_of(fx.cell)
+		var pts := _hex_pts(p)
+		var glow := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.005 + float(fx.cell.x) * 1.7)
+		draw_colored_polygon(pts, Color(1.0, 0.42, 0.08, 0.22 + 0.08 * glow))
+		draw_polyline(pts, Color(1.0, 0.6, 0.2, 0.5), 1.5)
+		var bob2 := sin(Time.get_ticks_msec() * 0.007 + float(fx.cell.x) * 1.3) * 2.0
+		draw_colored_polygon(PackedVector2Array([
+			p + Vector2(-6, 8 + bob2), p + Vector2(0, -9 - bob2), p + Vector2(6, 8 - bob2)]),
+			Color(1.0, 0.62, 0.12, 0.55))
+		draw_colored_polygon(PackedVector2Array([
+			p + Vector2(-3, 6), p + Vector2(0, -4 - bob2), p + Vector2(3, 6)]),
+			Color(1.0, 0.9, 0.35, 0.85))
 
 
 func _draw_hd2d_bg() -> void:
@@ -766,13 +823,21 @@ func _build_ui() -> void:
 	add_btn.call("⏪ -3s", func(): _set_tick(play_tick - 60))
 	add_btn.call("⏩ +3s", func(): _set_tick(play_tick + 60))
 	add_btn.call("跳到结束", func(): _set_tick(total_ticks))
-	# 主动技(玩家手动释放): 确定性输入注入 + 重模拟
-	ui.cast_btn = Button.new()
-	ui.cast_btn.text = "🔥 震地眩晕(周围2格)"
-	ui.cast_btn.pressed.connect(_cast_active)
-	hbox.add_child(ui.cast_btn)
 	add_btn.call("← 返回铁匠铺", func():
 		get_tree().change_scene_to_file("res://scenes/forge/forge_scene.tscn"))
+	# 右侧技能面板(主动技集中;垂直排列)
+	ui.skill_box = VBoxContainer.new()
+	ui.skill_box.position = Vector2(1075, 250)
+	ui.skill_box.add_theme_constant_override("separation", 10)
+	add_child(ui.skill_box)
+	ui.cast_btn = Button.new()
+	ui.cast_btn.text = "🔥 震地眩晕\n(守卫·周围2格)"
+	ui.cast_btn.pressed.connect(func(): _cast_active("c_quake"))
+	ui.skill_box.add_child(ui.cast_btn)
+	ui.scorch_btn = Button.new()
+	ui.scorch_btn.text = "🔥 灼烧之种\n(射手·目标格)"
+	ui.scorch_btn.pressed.connect(func(): _cast_active("c_scorch"))
+	ui.skill_box.add_child(ui.scorch_btn)
 	# 时间轴滑杆(重放: 拖动任意跳转)
 	ui.slider = HSlider.new()
 	ui.slider.min_value = 0.0
@@ -844,18 +909,27 @@ func _process_ui() -> void:
 			charge = float(snap.get("__contract", {}).get("charge", 0.0))
 		ui.contract.text = "【蓄能盾击】储能 %.1f/8" % charge
 		# 主动技按钮冷却状态(契约侧 cooldown_until 驱动)
-		if sim != null and sim.contracts.has("c_quake"):
-			var cd_left := maxi(int(sim.contracts["c_quake"].cooldown_until) - play_tick, 0)
-			ui.cast_btn.disabled = cd_left > 0
-			ui.cast_btn.text = "🔥 震地眩晕(冷却 %s 秒)" % _tick_s(cd_left) if cd_left > 0 \
-				else "🔥 震地眩晕(周围2格)"
+		_refresh_skill_btn(ui.cast_btn, "c_quake", "🔥 震地眩晕\n(守卫·周围2格)")
+		_refresh_skill_btn(ui.scorch_btn, "c_scorch", "🔥 灼烧之种\n(射手·目标格)")
 		# 重放提示
 		ui.tip.text = "拖动下方时间轴可回看任意时刻(自动暂停);⏮/⏪/⏩ 跳跃浏览"
 	else:
 		ui.status.text = "布阵阶段: 左侧部署区 2×3 起步 · 中央空列 · 右侧敌方部署区"
 		ui.contract.text = ""
-		ui.cast_btn.text = "🔥 震地眩晕(战斗中可放)"
+		ui.cast_btn.text = "🔥 震地眩晕\n(战斗中可放)"
 		ui.cast_btn.disabled = true
+		ui.scorch_btn.text = "🔥 灼烧之种\n(战斗中可放)"
+		ui.scorch_btn.disabled = true
+
+
+## 技能按钮冷却刷新(统一 冷却显示为秒)
+func _refresh_skill_btn(btn: Button, cid: String, base_txt: String) -> void:
+	if sim != null and sim.contracts.has(cid):
+		var cd_left := maxi(int(sim.contracts[cid].cooldown_until) - play_tick, 0)
+		btn.disabled = cd_left > 0
+		btn.text = (base_txt + "\n冷却 %s 秒") % _tick_s(cd_left) if cd_left > 0 else base_txt
+	else:
+		btn.disabled = true
 
 
 ## tick -> 秒(1 位小数)

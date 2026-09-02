@@ -4,6 +4,7 @@ class_name SimEntityDef
 ## 像素位置由播放器从 grid 投影 + 滑动插值产生。
 
 const Grid := preload("res://core/runtime/hex_grid.gd")
+const Bal := preload("res://core/config/balance.gd")
 
 
 ## 创建实体。kind: hero | enemy | summon;faction: player | enemy
@@ -40,11 +41,19 @@ static func make(id: String, kind: String, faction: String, name: String, role: 
 
 
 ## 状态操作(纯数据)
+## DoT 类(burning/poisoned/bleeding/withering)重复挂载 = 叠加层数(封顶 stacks_max);其余 = 刷新时长
 static func apply_status(e: Dictionary, status_id: String, ticks: int, source_id: String) -> void:
+	var cfg := Bal.status_cfg(status_id)
+	var is_dot: bool = cfg.get("dot", 0.0) > 0.0
 	if not e.statuses.has(status_id):
 		e.statuses[status_id] = {"ticks": ticks, "stacks": 1, "source_id": source_id}
-	else:
-		e.statuses[status_id].ticks = maxi(e.statuses[status_id].ticks, ticks)
+		return
+	var st: Dictionary = e.statuses[status_id]
+	st.ticks = maxi(st.ticks, ticks)
+	if is_dot:
+		st.stacks = mini(int(st.get("stacks", 1)) + 1, int(cfg.get("stacks_max", 3)))
+	if st.get("source_id", "") == "":
+		st.source_id = source_id
 
 
 static func has_status(e: Dictionary, status_id: String) -> bool:

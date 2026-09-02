@@ -53,6 +53,7 @@ const ACTION_FUNCS := {
 	"heal_self": 1,         # (amount) v0.2.1 治疗持有者(芭芭拉/战吼恢复)
 	"spawn_beam": 2,        # (duration_ticks, damage) v0.2.1 沿攻击方向持续光束(太阳射线/终极闪光)
 	"create_wall": 2,       # (length, lifetime) v0.2.1 阻挡敌方投射物的规则墙(亚索风墙)
+	"scorch": 1,            # (lifetime) v0.5 当前攻击目标格点燃灼烧地面(灼烧之种)
 }
 
 ## ---- 生成型函数（v0.2：可出现在表达式位置，返回实体/区域引用） ----
@@ -93,6 +94,7 @@ const COLLECTION_FUNCS := {
 	"enemies_in_range": 1,      # (radius) -> 范围内敌人实体列表
 	"all_enemies": 0,           # -> 战场全部敌人
 	"units_in_range": 1,        # (radius) -> 范围内全部实体(不分阵营,主动 AOE 用, v0.5)
+	"scorched_units": 0,        # v0.5 本武器灼烧格上的敌人(via weapon_state)
 }
 
 ## ---- 事件上下文保留变量(handler 内可直接读取,由 sim 提供) ----

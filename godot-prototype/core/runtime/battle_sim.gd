@@ -8,6 +8,7 @@ const DefAction := preload("res://core/runtime/sim_actions.gd")
 const Chain := preload("res://core/runtime/damage_chain.gd")
 const SimContract := preload("res://core/runtime/sim_contract.gd")
 const Grid := preload("res://core/runtime/hex_grid.gd")
+const Bal := preload("res://core/config/balance.gd")
 
 ## 默认棋盘边界(axial 矩形)。表现层可用 configure_board() 为随机战场覆盖边界。
 const BOARD_Q_MIN := 0
@@ -120,6 +121,24 @@ func _tick_cell_effects() -> void:
 			cell_effects.erase(eid)
 
 
+## DoT 跳伤: burning/poisoned/bleeding/withering 按各自 interval 跳伤,伤害 = dot × 层数
+func _tick_dots() -> void:
+	for ent in entities.values():
+		if not ent.alive:
+			continue
+		for sid in ent.statuses.keys():
+			var cfg: Dictionary = Bal.status_cfg(sid)
+			var dot: float = float(cfg.get("dot", 0.0))
+			if dot <= 0.0:
+				continue
+			var interval: int = int(cfg.get("interval", 20))
+			if tick % interval != 0:
+				continue
+			var stacks: int = int(ent.statuses[sid].get("stacks", 1))
+			mechanic_damage("", ent, sid, dot * stacks, "")
+			break
+
+
 ## 单位从 from 移动到 to: 触发格子进出效果事件(仅有格效果时才广播,零开销)
 func _emit_cell_events(u: Dictionary, from: Vector2i, to: Vector2i) -> void:
 	if cell_effects.is_empty() or from == to:
@@ -134,6 +153,40 @@ func _emit_cell_events(u: Dictionary, from: Vector2i, to: Vector2i) -> void:
 		push_event({"kind": "cell_enter", "source_id": u.id, "target_id": u.id,
 			"cell": to, "effects": in_fx, "tick": tick})
 		_broadcast_for(u.id, "cell_enter", {"unit": u, "cell": to, "effects": in_fx, "tick": tick})
+
+
+## 灼烧格(scorch 原语): 在持有者"当前攻击目标"的格子放置持续灼烧地面
+## 返回被灼烧的格(无目标时返回 (-999,-999))
+func scorch_cell(holder_id: String, lifetime: int) -> Vector2i:
+	var h: Dictionary = entities.get(holder_id, {})
+	if h.is_empty():
+		return Vector2i(-999, -999)
+	var tid: String = str(h.get("cur_target", ""))
+	if tid.is_empty() or not entities.has(tid) or not entities[tid].alive:
+		tid = str(h.get("focus_target", ""))
+	if tid.is_empty() or not entities.has(tid) or not entities[tid].alive:
+		var t := DefEntity.nearest_enemy_of(h, entities, 99999)
+		tid = t.get("id", "")
+	if tid.is_empty():
+		return Vector2i(-999, -999)
+	var cell: Vector2i = entities[tid].grid
+	add_cell_effect(cell, holder_id, "burning_ground", lifetime)
+	push_event({"kind": "scorch", "source_id": holder_id, "cell": cell, "tick": tick,
+		"lifetime": lifetime})
+	return cell
+
+
+## 指定格上的活体(可选排除阵营;供 scorched_units 查询)
+func units_on_cell(cell: Vector2i, exclude_faction: String = "") -> Array:
+	var out: Array = []
+	for e in entities.values():
+		if not e.alive:
+			continue
+		if exclude_faction != "" and e.faction == exclude_faction:
+			continue
+		if e.grid == cell:
+			out.append({"id": e.id})
+	return out
 
 
 ## ---------------- 实体与注册 ----------------
@@ -285,6 +338,8 @@ func tick_once() -> void:
 	# 状态到期(每 tick 衰减;ticks 语义 = 20Hz tick,如 60 = 3 秒)
 	for ent in entities.values():
 		DefEntity.tick_statuses(ent)
+	# DoT 跳伤(按状态 interval 调度;伤害 = dot × 层数)
+	_tick_dots()
 	# 契约定时器(每 20 tick)
 	if tick % 20 == 0:
 		_broadcast("timer", {"tick": tick})
