@@ -19,6 +19,7 @@ minecraft-mod-prototype/forgegod-mod/run-test-client.bat
 *.tmp
 .DS_Store
 Thumbs.db
+_research/
 
 # --- 敏感信息(任何形式的密钥文件) ---
 *.key
