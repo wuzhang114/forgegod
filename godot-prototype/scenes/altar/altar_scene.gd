@@ -212,10 +212,10 @@ func _on_accept() -> void:
 		return
 	var res := Session.commit_contract(str(turn.draft))
 	if res.ok:
-		# 契约定稿写回武器实例(武装间/战斗按实例契约生效)
+		# 契约定稿写回武器实例(武器库/武装间/战斗按实例契约生效;summary = AI 技能描述)
 		var EquipWeapon := preload("res://application/equip_weapon.gd")
 		EquipWeapon.add_contract(GameApp.run, str(Session.weapon_instance_id), "c_player",
-			str(Session.divine_contract.get("source", "")))
+			str(Session.divine_contract.get("source", "")), str(turn.get("summary", "")))
 		_say("你", "我接受这份契约。")
 		_say("神", "刻印已成。去让沙场替我作证。")
 		ui.accept.visible = false
@@ -233,5 +233,5 @@ func _on_to_battle() -> void:
 ## 神祇模式按钮刷新
 func _refresh_mode_btn() -> void:
 	var Provider := preload("res://application/negotiation_provider.gd")
-	var p := Provider.create(Provider.mode_of(GameApp.run))
+	var p: Object = Provider.create(Provider.mode_of(GameApp.run))
 	ui.mode_btn.text = "神祇: %s(点按切换)" % p.display_name()

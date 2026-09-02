@@ -39,14 +39,14 @@ static func loadout_of(run, hero_id: String) -> Dictionary:
 	return {}
 
 
-## 武器实例加挂契约(神裁定稿;instance_id 定位)
-static func add_contract(run, instance_id: String, cid: String, src: String) -> bool:
+## 武器实例加挂契约(神裁定稿;instance_id 定位;summary 为 AI 技能描述)
+static func add_contract(run, instance_id: String, cid: String, src: String, summary: String = "") -> bool:
 	for w in run.weapons:
 		if str(w.get("instance_id", "")) == instance_id:
 			if not w.has("contracts"):
 				w["contracts"] = []
 			var contracts: Array = w.contracts
-			contracts.append({"cid": cid, "src": src})
+			contracts.append({"cid": cid, "src": src, "summary": summary})
 			return true
 	return false
 

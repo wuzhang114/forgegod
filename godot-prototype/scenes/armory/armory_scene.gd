@@ -141,16 +141,21 @@ func _refresh() -> void:
 		l2.add_theme_font_size_override("font_size", 12)
 		l2.modulate = Color(0.75, 0.8, 0.75)
 		v.add_child(l2)
-		# 契约说明
+		# 契约说明(优先 AI 生成的技能描述 summary;否则本地转译)
 		for c in inst.get("contracts", []):
 			var src := str(c.get("src", ""))
 			if src.strip_edges() == "":
 				continue
-			var lines := Explainer.explain(src)
+			var summary := str(c.get("summary", "")).strip_edges()
 			var cl := Label.new()
-			cl.text = "  · " + "\n  · ".join(lines)
+			if summary != "":
+				cl.text = "  ✦ 神谕描述: " + summary
+				cl.modulate = Color(1.0, 0.9, 0.6)
+			else:
+				var lines := Explainer.explain(src)
+				cl.text = "  · " + "\n  · ".join(lines)
+				cl.modulate = Color(0.8, 0.9, 1.0)
 			cl.add_theme_font_size_override("font_size", 12)
-			cl.modulate = Color(0.8, 0.9, 1.0)
 			v.add_child(cl)
 		# 装备按钮行
 		var row := HBoxContainer.new()

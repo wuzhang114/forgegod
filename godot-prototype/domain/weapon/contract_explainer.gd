@@ -24,6 +24,7 @@ const DAMAGE_NAMES := {
 	"radiant": "神圣", "cryo": "冰霜", "electro": "雷元素", "anemo": "风元素",
 	"pyro": "火元素", "void": "虚空", "tidal": "潮汐", "thorns": "荆棘",
 	"dark": "暗影", "true": "真实", "beam": "光束", "fire_dot": "灼烧",
+	"falling": "陨落", "meteor": "陨星", "star": "星光", "nature": "自然", "light": "光",
 }
 
 
@@ -185,6 +186,9 @@ static func _expr_text(e: Dictionary, for_vars: Array) -> String:
 				return "最近的队友"
 			if fname == "nearest_enemy":
 				return "最近的敌人"
+			if fname == "weapon_state":
+				var a0: Array = e.get("args", [])
+				return "武器状态「%s」" % (_expr_text(a0[0], for_vars) if a0.size() > 0 else "?")
 			return "%s(...)" % fname
 		"binop":
 			var l := _expr_text(e.get("l", {}), for_vars)

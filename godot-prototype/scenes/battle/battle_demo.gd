@@ -252,7 +252,7 @@ func _run_battle(skill_entries: Array) -> void:
 			contract_pairs.append({"sid": "%s@%s" % [str(inst.instance_id), str(c.cid)],
 				"ast": parsed.ast, "holder": holder,
 				"has_active": _has_active_trigger(parsed.ast),
-				"label": "%s·%s" % [wname, str(c.cid).replace("c_", "神赐/主动")]})
+				"label": _skill_label(parsed.ast, str(inst.get("facts", {}).get("name", "")))})
 	# 多个契约共享同一武器对象: 任一契约扣耐久,UI 与另一契约都能读到(用户可见)
 	var weapon := _battle_weapon()
 	for cp in contract_pairs:
@@ -957,6 +957,16 @@ func _has_active_trigger(ast: Dictionary) -> bool:
 		if str(h.get("event", "")) == "right_click":
 			return true
 	return false
+
+
+## 技能按钮文本: 设备名(如 星陨之锤/灼烧之种)优先,兜底武器名+cid
+func _skill_label(ast: Dictionary, wname: String) -> String:
+	var dev := str(ast.get("name", "")).strip_edges()
+	if dev != "":
+		return "🔥 " + dev
+	if wname != "" and wname != "无名武器":
+		return "🔥 " + wname
+	return "🔥 神赐技能"
 
 
 ## tick -> 秒(1 位小数)
