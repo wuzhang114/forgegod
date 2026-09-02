@@ -39,10 +39,14 @@ var board_r_max := BOARD_R_MAX
 var blocked_cells: Dictionary = {}
 ## 格效果(地形/羁绊修饰层): id -> {id, cell, owner, kind, lifetime}(lifetime<0 永续)
 var cell_effects: Dictionary = {}
+## 延迟命中命令队列(command 化攻击调度): {hit_tick, source_id, target_id, tag, from, to}
+var pending_hits: Array = []
 
 const SIM_CONTRACT := SimContract
 ## 目标粘性窗口(tick): 锁定的目标在窗口内不因距离变化而更换(原目标死亡除外)
 const TARGET_STICKY_TICKS := 60
+## 远程弹道: 每格飞行 tick(20Hz 下 4 tick = 0.2s/格)
+const RANGED_FLIGHT_TICKS := 4
 
 
 func _init(seed_value: int = 1) -> void:
@@ -234,13 +238,14 @@ func tick_once() -> void:
 	for ent in entities.values():
 		if ent.alive and ent.current_action.is_empty():
 			decide(ent)
-	# 弹道/区域/光束/墙/召唤物/格效果
+	# 弹道/区域/光束/墙/召唤物/格效果/延迟命中命令
 	_tick_projectiles()
 	_tick_zones()
 	_tick_beams()
 	_tick_walls()
 	_tick_summons()
 	_tick_cell_effects()
+	_tick_pending_hits()
 	# 状态到期
 	if tick % 50 == 0:
 		for ent in entities.values():
@@ -295,7 +300,7 @@ func _progress_action(e: Dictionary) -> void:
 				e.current_action = {}
 
 
-## 判定窗开始: 结算一次攻击
+## 判定窗开始: 结算一次攻击(远程且目标距离>1 时改为发射弹道,延迟到命中 tick 结算)
 func _on_active_begin(e: Dictionary) -> void:
 	var a: Dictionary = e.current_action
 	if DefAction.is_block_tag(a.tag):
@@ -303,13 +308,31 @@ func _on_active_begin(e: Dictionary) -> void:
 		return
 	var target: Dictionary = entities.get(a.target_id, {})
 	if target.is_empty() or not target.alive:
-		_broadcast_for(e.id, "attack", {"target": {"id": a.target_id}, "attack_damage": e.atk,
-			"hit_landed": 0, "hit_crit": 0.0, "tick": tick})
-		push_event({"kind": "attack", "source_id": e.id, "target_id": a.target_id, "action_tag": a.tag,
-			"tick": tick, "hit_landed": 0, "crit_tier": 0.0, "base": 0.0,
-			"final_damage": 0.0, "blocked": false, "blocked_damage": 0.0,
-			"armor_after": 0.0, "statuses": [], "cause_ids": []})
+		_attack_missed(e, a)
 		return
+	# 远程弹道: 距离>1 时发射(飞行 tick 后命中);近战/贴脸立即结算(旧行为不变)
+	if a.tag == "ranged" and Grid.dist(e.grid, target.grid) > 1:
+		var flight: int = maxi(Grid.dist(e.grid, target.grid) - 1, 1) * RANGED_FLIGHT_TICKS
+		pending_hits.append({"hit_tick": tick + flight, "source_id": e.id,
+			"target_id": a.target_id, "tag": a.tag, "from": e.grid, "to": target.grid})
+		push_event({"kind": "projectile_launch", "source_id": e.id, "target_id": a.target_id,
+			"tick": tick, "flight": flight, "from": e.grid, "to": target.grid})
+		return
+	_resolve_hit(e, target, a)
+
+
+## 目标缺失/已死亡的空攻击事件(出手落空)
+func _attack_missed(e: Dictionary, a: Dictionary) -> void:
+	_broadcast_for(e.id, "attack", {"target": {"id": a.target_id}, "attack_damage": e.atk,
+		"hit_landed": 0, "hit_crit": 0.0, "tick": tick})
+	push_event({"kind": "attack", "source_id": e.id, "target_id": a.target_id, "action_tag": a.tag,
+		"tick": tick, "hit_landed": 0, "crit_tier": 0.0, "base": 0.0,
+		"final_damage": 0.0, "blocked": false, "blocked_damage": 0.0,
+		"armor_after": 0.0, "statuses": [], "cause_ids": []})
+
+
+## 攻击命中结算(近战在判定窗开始时;弹道在命中 tick 被命令队列触发)
+func _resolve_hit(e: Dictionary, target: Dictionary, a: Dictionary) -> void:
 	var result := Chain.resolve_attack(_atk_source(e), target, a.tag, rng, dmg_bonus, _vulnerability_of(target), {})
 	var damage_done: float = result.final_damage if result.landed else 0.0
 	# 契约事件(定向): attack(无论命中) -> 攻击者; block -> 格挡者; hurt -> 受击者
@@ -338,6 +361,28 @@ func _on_active_begin(e: Dictionary) -> void:
 	})
 	if result.landed and target.hp <= 0.0 and target.alive:
 		_kill(e, target)
+
+
+## 延迟命中命令到期结算(远程弹道到达)
+func _tick_pending_hits() -> void:
+	if pending_hits.is_empty():
+		return
+	for h in pending_hits.duplicate():
+		if int(h.hit_tick) > tick:
+			continue
+		pending_hits.erase(h)
+		var src: Dictionary = entities.get(h.source_id, {})
+		var tgt: Dictionary = entities.get(h.target_id, {})
+		if src.is_empty():
+			push_event({"kind": "attack", "source_id": h.source_id, "target_id": h.target_id,
+				"action_tag": h.tag, "tick": tick, "hit_landed": 0, "crit_tier": 0.0,
+				"base": 0.0, "final_damage": 0.0, "blocked": false, "blocked_damage": 0.0,
+				"armor_after": 0.0, "statuses": [], "cause_ids": []})
+			continue
+		if tgt.is_empty() or not tgt.alive:
+			_attack_missed(src, {"tag": h.tag, "target_id": h.target_id})
+			continue
+		_resolve_hit(src, tgt, {"tag": h.tag, "target_id": h.target_id})
 
 
 func _kill(attacker: Dictionary, target: Dictionary) -> void:

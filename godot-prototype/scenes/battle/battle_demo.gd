@@ -378,6 +378,37 @@ func _add_effect(ev: Dictionary) -> void:
 			_float(pos, "破甲!", Color(1.0, 0.7, 0.4))
 		"status_apply":
 			_float(pos, "+" + str(ev.get("status", "")), Color(0.9, 0.6, 0.4))
+		"projectile_launch":
+			_spawn_projectile_fx(ev)
+
+
+## 弹道飞行表现: 金矢从发射格滑向目标格(飞行时长与 sim 一致)
+func _spawn_projectile_fx(ev: Dictionary) -> void:
+	var from: Vector2 = px_of(ev.get("from", Vector2i.ZERO))
+	var to: Vector2 = px_of(ev.get("to", Vector2i.ZERO))
+	var flight := maxf(float(ev.get("flight", 4)), 1.0) / 20.0  # tick -> 秒
+	var proj := ProjFX.new()
+	proj.position = from
+	proj.rotation = (to - from).angle()
+	ui.layer.add_child(proj)
+	var tw := create_tween()
+	tw.tween_property(proj, "position", to, flight).set_trans(Tween.TRANS_LINEAR)
+	tw.tween_callback(proj.queue_free)
+
+
+## 弹道节点: 金箭头(短尾线 + 箭头)
+class ProjFX:
+	extends Node2D
+	var color := Color(1.0, 0.85, 0.4)
+
+	func _init() -> void:
+		z_index = 12
+
+	func _draw() -> void:
+		draw_circle(Vector2.ZERO, 3.5, color)
+		draw_line(Vector2(-4, 0), Vector2(-15, 0), color, 2.0)
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(5, 0), Vector2(-1, -3.5), Vector2(-1, 3.5)]), color)
 
 
 func _px_of_eid(eid: String) -> Vector2:

@@ -16,6 +16,7 @@ const BattleTests := preload("res://tests/test_battle_sim.gd")
 const BattleB2 := preload("res://tests/test_battle_b2.gd")
 const BoardFxTests := preload("res://tests/test_board_effects.gd")
 const StickyTests := preload("res://tests/test_target_sticky.gd")
+const RangedTests := preload("res://tests/test_ranged_flight.gd")
 const ForgeTests := preload("res://tests/test_forge.gd")
 const GodTests := preload("res://tests/test_scripted_god.gd")
 const BalanceTests := preload("res://tests/test_balance.gd")
@@ -779,6 +780,7 @@ func _initialize() -> void:
 	_test_battle_b2()
 	_test_board_fx()
 	_test_sticky()
+	_test_ranged()
 	_test_forge_core()
 	_test_scripted_god()
 	_test_balance()
@@ -1699,6 +1701,13 @@ func _test_sticky() -> void:
 	var r: Dictionary = t.run()
 	print("-- 目标粘性: 通过 %d / 失败 %d --" % [r.pass, r.fail])
 	_check(r.ok, "目标粘性测试全绿")
+
+
+func _test_ranged() -> void:
+	var t := RangedTests.new()
+	var r: Dictionary = t.run()
+	print("-- 远程弹道: 通过 %d / 失败 %d --" % [r.pass, r.fail])
+	_check(r.ok, "远程弹道测试全绿")
 
 
 func _test_forge_core() -> void:
