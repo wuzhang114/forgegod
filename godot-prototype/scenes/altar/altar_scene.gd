@@ -128,16 +128,55 @@ func _say(who: String, text: String) -> void:
 	ui.log.scroll_to_line(ui.log.get_line_count())
 
 
+var _pray_thread = null      # 云端神祇后台线程
+var _pray_result: Dictionary = {}
+
+
 func _on_submit() -> void:
+	if _pray_thread != null:
+		return
 	var app: String = ui.input.text.strip_edges()
 	if app.is_empty():
 		_say("你", "(尚未开口)")
 		return
 	var Provider := preload("res://application/negotiation_provider.gd")
-	var god := Provider.create(Provider.mode_of(GameApp.run))
-	var turn: Dictionary = god.adjudicate(Session.weapon_facts, app)
+	var mode := Provider.mode_of(GameApp.run)
+	if mode == "remote":
+		# 云端神祇: 后台线程调用,UI 轮询(按钮禁用 + 沉思提示),避免卡死画面
+		_pray_result = {}
+		ui.ask.disabled = true
+		ui.ask.text = "神祇沉思中…"
+		_say("你", app)
+		_pray_thread = Thread.new()
+		_pray_thread.start(_pray_remote.bind(app))
+		return
+	_on_turn_ready(Provider, mode, app)
+
+
+## 后台线程: 云端裁决(不进场景树;RefCounted+OS 调用安全)
+func _pray_remote(app: String) -> void:
+	var Provider := preload("res://application/negotiation_provider.gd")
+	var god := Provider.create("remote")
+	_pray_result = god.adjudicate(Session.weapon_facts, app)
+
+
+func _process(_delta: float) -> void:
+	if _pray_thread == null:
+		return
+	if not _pray_thread.is_alive():
+		_pray_thread.wait_to_finish()
+		_pray_thread = null
+		ui.ask.disabled = false
+		ui.ask.text = "上奏"
+		_on_turn_ready(preload("res://application/negotiation_provider.gd"), "remote", "")
+
+
+func _on_turn_ready(Provider, mode: String, app: String) -> void:
+	var god: Object = Provider.create(mode)
+	var turn: Dictionary = god.adjudicate(Session.weapon_facts, app) if mode != "remote" else _pray_result
 	Session.divine_turn = turn
-	_say("你", app)
+	if mode != "remote":
+		_say("你", app)
 	_say("神", turn.speech)
 	var stance_zh := {"QUESTION": "质询", "COUNTEROFFER": "还价", "PROPOSE": "应允", "REFUSE": "驳回"}
 	if turn.stance == "QUESTION":

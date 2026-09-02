@@ -6,6 +6,7 @@ extends RefCounted
 const HttpProbe := preload("res://adapters/negotiation/http_probe.gd")
 const ContextBuilder := preload("res://adapters/negotiation/context_builder.gd")
 const LocalAI := preload("res://adapters/negotiation/local_ai_adapter.gd")
+const RemoteAI := preload("res://adapters/negotiation/remote_ai_adapter.gd")
 
 var _passes := 0
 var _fails := 0
@@ -17,6 +18,7 @@ func run() -> Dictionary:
 	_test_normalize_endpoint()
 	_test_context_builder()
 	_test_prepare_cache()
+	_test_parse_turn_from_llm()
 	return {"ok": _fails == 0, "pass": _passes, "fail": _fails}
 
 
@@ -78,3 +80,18 @@ func _test_prepare_cache() -> void:
 	var msgs := adapter.prepare_context({"name": "试剑", "craft": {}})
 	_check(adapter.cached_context.size() >= 2, "适配器上下文缓存")
 	_check(msgs.size() == adapter.cached_context.size(), "prepare 返回与缓存一致")
+
+
+func _test_parse_turn_from_llm() -> void:
+	# 纯 JSON
+	var t1 := RemoteAI.parse_turn_from_llm('{"stance":"PROPOSE","speech":"应允","cited_fact_ids":[],"missing":"","refuse_reason":"","draft":"device 试 { on hit { damage_weapon(1) } }"}')
+	_check(str(t1.get("stance", "")) == "PROPOSE" and str(t1.get("draft", "")).begins_with("device"),
+		"纯 JSON 解析")
+	# 代码块包裹
+	var t2 := RemoteAI.parse_turn_from_llm('前言... ```json\n{"stance":"QUESTION","speech":"问什么","cited_fact_ids":["x"],"missing":"材料","refuse_reason":"","draft":""}\n``` 后记')
+	_check(str(t2.get("stance", "")) == "QUESTION" and str(t2.get("missing", "")) == "材料",
+		"```json 块提取")
+	# 垃圾输出 -> 容错 REFUSE
+	var t3 := RemoteAI.parse_turn_from_llm("这不是 JSON,只是一段神秘的低语")
+	_check(str(t3.get("stance", "")) == "REFUSE" and str(t3.get("refuse_reason", "")) == "remote_parse_failed",
+		"垃圾输出容错")
