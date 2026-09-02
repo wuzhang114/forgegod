@@ -644,8 +644,7 @@ func _apply_stage_ui() -> void:
 		for i in STAGES.size():
 			if STAGES[i].id == stage:
 				if i + 1 < STAGES.size():
-					nxt = STAGES[i + 1].name.replace("① ", "").replace("② ", "").replace("③ ", "")
-					.replace("④ ", "").replace("⑤ ", "")
+					nxt = STAGES[i + 1].name.replace("① ", "").replace("② ", "").replace("③ ", "").replace("④ ", "").replace("⑤ ", "")
 		ui.next_btn.text = "确定并进入下一步(%s) >" % nxt
 
 
