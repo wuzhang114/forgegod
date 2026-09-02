@@ -303,7 +303,7 @@ func _run_battle(skill_entries: Array) -> void:
 	sim.add_contract("c_scorch", schecked.ast, "hero_3", weapon)
 	for entry in skill_entries:
 		sim.schedule_active(str(entry.cid), int(entry.at))
-	sim.run(2400)
+	sim.run(4800)  # 上限 240 秒(3 倍血长线战斗;超时不判胜负则按未分晓收尾)
 	total_ticks = maxi(sim.tick, 1)
 	effects = sim.events.duplicate(true)
 	# 快照重放(末尾一条为"结算收尾"状态: 存活单位回到站姿)

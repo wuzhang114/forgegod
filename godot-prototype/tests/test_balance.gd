@@ -68,8 +68,8 @@ func _test_crit_tiers() -> void:
 func _test_templates() -> void:
 	_check(Bal.hero_tpl("ranger").range_hex == 4, "射手射程 4 格")
 	_check(Bal.enemy_tpl("shooter").range_hex == 4, "远程敌射程 4")
-	_check(Bal.enemy_tpl("purger").hp == 50.0, "净化者血 50")
-	_check(Bal.hero_tpl("guard").hp == 100.0 and Bal.hero_tpl("duelist").hp == 90.0, "勇者模板")
+	_check(Bal.enemy_tpl("purger").hp == 150.0, "净化者血 150(×3)")
+	_check(Bal.hero_tpl("guard").hp == 300.0 and Bal.hero_tpl("duelist").hp == 270.0, "勇者模板(×3)")
 	_check(Bal.STATUS.has("burning") and Bal.STATUS.burning.stacks_max == 3, "状态表含 DoT 层数上限")
 	_check(Bal.ACTION.heavy_blow == 1.5 and Bal.ACTION.block == 0.0, "动作倍率表")
 

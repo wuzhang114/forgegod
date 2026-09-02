@@ -47,16 +47,17 @@ const ACTION := {
 }
 
 ## ---- 单位模板(勇者固定属性 + 敌人) ----
+## 血量统一 ×3(观看长线战斗用;数值轴不变,时长近似 ×3)
 const HEROES := {
-	"guard":   {"hp": 100.0, "atk": 10.0, "armor": 5.0, "hit": 0.9, "evade": 0.05, "range_hex": 1},
-	"duelist": {"hp": 90.0,  "atk": 8.0,  "armor": 3.0, "hit": 0.92, "evade": 0.05, "range_hex": 1},
-	"ranger":  {"hp": 80.0,  "atk": 11.0, "armor": 2.0, "hit": 0.95, "evade": 0.05, "range_hex": 4},
+	"guard":   {"hp": 300.0, "atk": 10.0, "armor": 5.0, "hit": 0.9, "evade": 0.05, "range_hex": 1},
+	"duelist": {"hp": 270.0, "atk": 8.0,  "armor": 3.0, "hit": 0.92, "evade": 0.05, "range_hex": 1},
+	"ranger":  {"hp": 240.0, "atk": 11.0, "armor": 2.0, "hit": 0.95, "evade": 0.05, "range_hex": 4},
 }
 
 const ENEMIES := {
-	"brute":   {"hp": 40.0, "atk": 4.0,  "armor": 3.0, "hit": 0.85, "evade": 0.02, "range_hex": 1, "move_interval": 14},
-	"shooter": {"hp": 34.0, "atk": 6.0,  "armor": 2.0, "hit": 0.9,  "evade": 0.03, "range_hex": 4, "move_interval": 16},
-	"purger":  {"hp": 50.0, "atk": 3.0,  "armor": 4.0, "hit": 0.88, "evade": 0.04, "range_hex": 2, "move_interval": 12},
+	"brute":   {"hp": 120.0, "atk": 4.0,  "armor": 3.0, "hit": 0.85, "evade": 0.02, "range_hex": 1, "move_interval": 14},
+	"shooter": {"hp": 102.0, "atk": 6.0,  "armor": 2.0, "hit": 0.9,  "evade": 0.03, "range_hex": 4, "move_interval": 16},
+	"purger":  {"hp": 150.0, "atk": 3.0,  "armor": 4.0, "hit": 0.88, "evade": 0.04, "range_hex": 2, "move_interval": 12},
 }
 
 ## ---- 棋盘(02-battle-system-design.md §2/§7) ----
