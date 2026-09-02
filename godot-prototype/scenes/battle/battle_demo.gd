@@ -38,6 +38,10 @@ device 蓄能盾击 {
 const HEX_SIZE := 50.0
 const Y_SQUASH := 0.54
 const BOARD_CENTER := Vector2(640, 430)  # 兜底;实际每张地图用 ground_y(贴地面带)
+## 单位统一造型基准: 视觉身高/身宽(局部原点=格心,脚踩在 y=0)
+const UNIT_H := 46.0
+const UNIT_W := 18.0
+const UNIT_HEAD_R := 7.0
 
 ## 每张图只承担环境与平整地面，中心棋盘由 _draw_board() 叠加。
 const BATTLE_BACKGROUNDS := {
@@ -461,9 +465,12 @@ func _draw_deploy_units() -> void:
 		var col: Color = HERO_COLORS.get(e.role, ENEMY_COLOR) if is_hero else ENEMY_COLOR
 		if drag_index >= 0 and deploy_entities[drag_index].id == e.id:
 			p = get_viewport().get_mouse_position()
-		draw_circle(p + Vector2(0, -16), 7.0, col)
-		draw_rect(Rect2(p + Vector2(-10, -8), Vector2(20, 22)), col)
-		draw_rect(Rect2(p + Vector2(-10, -8), Vector2(20, 22)), Color(0, 0, 0, 0.5), false, 1.0)
+		# 与战斗纸片人同一造型基准: 脚底=格心(y=0),头在肩上方
+		draw_circle(p + Vector2(0, -(UNIT_H - UNIT_HEAD_R) - 4.5), UNIT_HEAD_R, col.darkened(0.15))
+		draw_rect(Rect2(p + Vector2(-UNIT_W / 2.0, -(UNIT_H - UNIT_HEAD_R) + 1.5),
+			Vector2(UNIT_W, UNIT_H - UNIT_HEAD_R - 5.0)), col)
+		draw_rect(Rect2(p + Vector2(-UNIT_W / 2.0, -(UNIT_H - UNIT_HEAD_R) + 1.5),
+			Vector2(UNIT_W, UNIT_H - UNIT_HEAD_R - 5.0)), Color(0, 0, 0, 0.5), false, 1.0)
 
 
 ## 角色精灵素材(守卫已接入;后续可按角色扩充)
@@ -549,39 +556,45 @@ class UnitNode:
 			rot = sin(Time.get_ticks_msec() * 0.03) * 0.35
 		elif phase == "windup":
 			rot = -0.15
-		# (纸片阵列绘制: 有精灵素材时绘制贴图, 否则程序绘制)
+		# 统一基准: 局部原点=格心,脚底=y0,身高 UNIT_H(与布阵占位一致)
 		draw_set_transform(Vector2(0, base_y), rot, Vector2.ONE)
 		if texture != null:
 			var tsize := Vector2(texture.get_size())
-			var target_h := 52.0
+			var target_h := UNIT_H
 			var target_w := tsize.x * (target_h / tsize.y)
 			draw_texture_rect(texture, Rect2(Vector2(-target_w / 2.0, -target_h), Vector2(target_w, target_h)), false)
-			# 攻击挥击流光
+			# 攻击挥击流光(肩部高度)
 			if phase == "active":
-				draw_line(Vector2(12 * facing, -14), Vector2(26 * facing, 2), Color(1.0, 0.85, 0.4), 2.0)
+				draw_line(Vector2(12 * facing, -30), Vector2(26 * facing, -18), Color(1.0, 0.85, 0.4), 2.0)
 		else:
-			# 头
-			draw_circle(Vector2(0, -18), 6.5, color.darkened(0.15))
-			# 身体
-			var h := 22.0
+			# 头(肩上方)
+			var head_y := -(UNIT_H - UNIT_HEAD_R)
+			draw_circle(Vector2(0, head_y), UNIT_HEAD_R, color.darkened(0.15))
+			# 身体: 脚底=格心(y=0)
+			var h := UNIT_H - UNIT_HEAD_R - 5.0
 			if phase == "windup":
-				h = 18.0
+				h = h - 8.0
 			elif phase == "active":
-				h = 26.0
-			draw_rect(Rect2(Vector2(-9, -11), Vector2(18, h)), color)
-			draw_rect(Rect2(Vector2(-9, -11), Vector2(18, h)), Color(0, 0, 0, 0.5), false, 1.0)
-			# 武器(朝向侧)
+				h = UNIT_H - 8.0
+			var body_top := -(UNIT_H - UNIT_HEAD_R) + 1.5
+			draw_rect(Rect2(Vector2(-UNIT_W / 2.0, body_top), Vector2(UNIT_W, h)), color)
+			draw_rect(Rect2(Vector2(-UNIT_W / 2.0, body_top), Vector2(UNIT_W, h)), Color(0, 0, 0, 0.5), false, 1.0)
+			# 武器(朝向侧,持于肩下)
 			var wx := 10.0 * facing
-			draw_line(Vector2(wx, -2), Vector2(wx + 14 * facing, -8), Color(0.85, 0.8, 0.7), 2.5)
+			var shoulder_y := -(UNIT_H - UNIT_HEAD_R) + 6.0
+			draw_line(Vector2(wx, shoulder_y + 6.0), Vector2(wx + 14 * facing, shoulder_y),
+				Color(0.85, 0.8, 0.7), 2.5)
 			if phase == "active":
-				draw_line(Vector2(wx + 14 * facing, -8), Vector2(wx + 20 * facing, 6), Color(1.0, 0.85, 0.4), 2.0)
+				draw_line(Vector2(wx + 14 * facing, shoulder_y), Vector2(wx + 20 * facing, shoulder_y + 14.0),
+					Color(1.0, 0.85, 0.4), 2.0)
 		if tag == "block" and phase == "active":
-			draw_circle(Vector2(12 * facing, -10), 9.0, Color(0.6, 0.85, 1.0, 0.5))
+			draw_circle(Vector2(12 * facing, -26), 9.0, Color(0.6, 0.85, 1.0, 0.5))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		# 血条(不随体摆动)
-		draw_rect(Rect2(Vector2(-15, -32), Vector2(30, 4)), Color(0.1, 0.08, 0.1))
+		# 血条(头顶上方,不随体摆动)
+		var bar_y := -UNIT_H - 6.0
+		draw_rect(Rect2(Vector2(-15, bar_y), Vector2(30, 4)), Color(0.1, 0.08, 0.1))
 		var hc := Color(0.9, 0.3, 0.3) if color == ENEMY_COLOR else Color(0.3, 0.9, 0.4)
-		draw_rect(Rect2(Vector2(-15, -32), Vector2(30 * hp_ratio, 4)), hc)
+		draw_rect(Rect2(Vector2(-15, bar_y), Vector2(30 * hp_ratio, 4)), hc)
 
 
 ## ---------------- UI ----------------
