@@ -18,6 +18,10 @@ func _ready() -> void:
 	saves = SaveRepository.new()
 	router = AppRouter.new()
 	run = RunState.new()
+	# 神祇配置(开始界面 API 设置;user://god_config.json)
+	var GodConfig := preload("res://adapters/negotiation/god_config.gd")
+	var cfg := GodConfig.load_config()
+	run.world_flags["god_mode"] = GodConfig.effective_mode(cfg)
 	# 无存档时自动开新局(演示默认);有存档则由 UI"继续"触发
 	if not saves.has_save(0):
 		run.new_run(20260902)
@@ -27,6 +31,8 @@ func _ready() -> void:
 ## 新游戏: 以种子重置 RunState,并清空过渡 GameSession(两边同步)
 func new_game(seed_value: int = 0) -> void:
 	run.new_run(seed_value)
+	var GodConfig := preload("res://adapters/negotiation/god_config.gd")
+	run.world_flags["god_mode"] = GodConfig.effective_mode(GodConfig.load_config())
 	GameSession.reset()
 
 

@@ -58,6 +58,11 @@ func _ready() -> void:
 	_update_facts()
 	_refresh_center()
 	_build_run_bar()
+	_build_god_panel()
+	# 未配置 AI 神时提示(开始界面引导)
+	var GodConfig := preload("res://adapters/negotiation/god_config.gd")
+	if str(GodConfig.effective_mode(GodConfig.load_config())) == "scripted":
+		ui.tip.text = "提示: 神祇当前为内置脚本;点击右上「⚙ 神祇设置」可接入本地/云端 AI"
 
 
 ## ---------------- 运行控制条(新游戏/继续/存档) ----------------
@@ -85,6 +90,8 @@ func _build_run_bar() -> void:
 		GameApp.new_game()
 		_refresh_runinfo()
 		ui.tip.text = "新局已开(第 1 天)")
+	mk.call("⚙ 神祇设置", func():
+		ui.god_panel.visible = not ui.god_panel.visible)
 	# 运行信息(经济/队伍;RunState 唯一来源)
 	ui.runinfo = Label.new()
 	ui.runinfo.position = Vector2(400, 20)
@@ -100,6 +107,94 @@ func _refresh_runinfo() -> void:
 	var rep := float(r.world_flags.get("reputation", 0.0))
 	ui.runinfo.text = "第 %d 天 · 金币 %.0f · 声望 %.0f · %s" % [
 		r.current_day, r.money, rep, Inventory.describe(r)]
+
+
+## ---------------- 神祇设置面板(开始界面填写 API) ----------------
+
+func _build_god_panel() -> void:
+	var GodConfig := preload("res://adapters/negotiation/god_config.gd")
+	var Panel := PanelContainer.new()
+	Panel.position = Vector2(390, 150)
+	Panel.custom_minimum_size = Vector2(500, 360)
+	add_child(Panel)
+	var v := VBoxContainer.new()
+	Panel.add_child(v)
+	var title := Label.new()
+	title.text = "神祇设置(决定交涉时由谁裁决)"
+	title.add_theme_font_size_override("font_size", 16)
+	title.modulate = Color(0.9, 0.75, 0.5)
+	v.add_child(title)
+	v.add_child(Label.new())
+	# 模式
+	var mode_row := HBoxContainer.new()
+	mode_row.add_child(Label.new())
+	var mode_lbl := Label.new()
+	mode_lbl.text = "神祇: "
+	mode_lbl.custom_minimum_size = Vector2(90, 0)
+	mode_row.add_child(mode_lbl)
+	ui.god_mode = OptionButton.new()
+	ui.god_mode.add_item("脚本神(内置,无需网络)", 0)
+	ui.god_mode.add_item("本地 AI(填写端点+密钥)", 1)
+	ui.god_mode.add_item("云端 AI(填写端点+密钥)", 2)
+	mode_row.add_child(ui.god_mode)
+	v.add_child(mode_row)
+	v.add_child(Label.new())
+	# 本地 AI
+	var l1 := Label.new()
+	l1.text = "本地 AI 端点(OpenAI 兼容 /v1/chat/completions)"
+	v.add_child(l1)
+	ui.local_endpoint = LineEdit.new()
+	v.add_child(ui.local_endpoint)
+	var l2 := Label.new()
+	l2.text = "本地 AI 密钥"
+	v.add_child(l2)
+	ui.local_key = LineEdit.new()
+	ui.local_key.secret = true
+	v.add_child(ui.local_key)
+	v.add_child(Label.new())
+	# 云端 AI
+	var l3 := Label.new()
+	l3.text = "云端 AI 端点"
+	v.add_child(l3)
+	ui.remote_endpoint = LineEdit.new()
+	v.add_child(ui.remote_endpoint)
+	var l4 := Label.new()
+	l4.text = "云端 AI 密钥"
+	v.add_child(l4)
+	ui.remote_key = LineEdit.new()
+	ui.remote_key.secret = true
+	v.add_child(ui.remote_key)
+	# 保存
+	var save_row := HBoxContainer.new()
+	var save := Button.new()
+	save.text = "💾 保存神祇配置"
+	save.pressed.connect(func():
+		var cfg := {
+			"god_mode": ["scripted", "local", "remote"][ui.god_mode.selected],
+			"local_endpoint": ui.local_endpoint.text.strip_edges(),
+			"local_key": ui.local_key.text.strip_edges(),
+			"remote_endpoint": ui.remote_endpoint.text.strip_edges(),
+			"remote_key": ui.remote_key.text.strip_edges(),
+		}
+		var res := GodConfig.save_config(cfg)
+		GameApp.run.world_flags["god_mode"] = GodConfig.effective_mode(cfg)
+		ui.tip.text = "神祇配置已保存 ✓(当前: %s)" % cfg.get("god_mode", "scripted") \
+			if res.get("ok", false) else "保存失败: %s" % str(res.get("error", "?")))
+	save_row.add_child(save)
+	var close := Button.new()
+	close.text = "关闭"
+	close.pressed.connect(func(): Panel.visible = false)
+	save_row.add_child(close)
+	v.add_child(save_row)
+	# 载入现有配置
+	var c := GodConfig.load_config()
+	ui.god_mode.selected = ["scripted", "local", "remote"].find(str(c.get("god_mode", "scripted")))
+	ui.local_endpoint.text = str(c.get("local_endpoint", ""))
+	ui.local_key.text = str(c.get("local_key", ""))
+	ui.remote_endpoint.text = str(c.get("remote_endpoint", ""))
+	ui.remote_key.text = str(c.get("remote_key", ""))
+	ui.god_panel = Panel
+	ui.god_panel.visible = false
 
 
 ## ---------------- 静态 UI ----------------

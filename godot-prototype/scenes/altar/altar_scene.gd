@@ -145,7 +145,10 @@ func _on_submit() -> void:
 	if turn.stance == "REFUSE":
 		ui.stance.text = "[color=#ff8080]驳回: %s[/color]" % turn.refuse_reason
 	if turn.stance in ["PROPOSE", "COUNTEROFFER"]:
-		ui.stance.text = "[color=#8f8][b]神已给出契约草案(代价见右)[/b][/color]\n[draft]\n%s\n[/draft]" % str(turn.draft).strip_edges()
+		# 契约效果说明(本地化文字;源码不再直接展示给玩家)
+		var Explainer := preload("res://domain/weapon/contract_explainer.gd")
+		var desc: Array = Explainer.explain(str(turn.draft))
+		ui.stance.text = "[color=#8f8][b]神已应允,契约效果如下[/b][/color]\n" + "\n".join(desc)
 		ui.accept.visible = true
 	else:
 		ui.accept.visible = false
