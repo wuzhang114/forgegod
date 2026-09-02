@@ -157,6 +157,14 @@ func _refresh() -> void:
 				cl.modulate = Color(0.8, 0.9, 1.0)
 			cl.add_theme_font_size_override("font_size", 12)
 			v.add_child(cl)
+			# 重击触发提示: 只有守卫的攻击是重击(heavy_blow)
+			if _uses_heavy_blow(src):
+				var warn := Label.new()
+				warn.text = "  ⚠ 含「重击时」效果 —— 只有守卫·布兰特的攻击是重击;" \
+					if str(holder) != "hero_1" else "  ✔ 含「重击时」效果:守卫出手即可触发"
+				warn.add_theme_font_size_override("font_size", 12)
+				warn.modulate = Color(1.0, 0.6, 0.45) if str(holder) != "hero_1" else Color(0.6, 0.95, 0.6)
+				v.add_child(warn)
 		# 装备按钮行
 		var row := HBoxContainer.new()
 		var tip_l := Label.new()
@@ -186,6 +194,11 @@ static func _has_contract(inst: Dictionary) -> bool:
 		if str(c.get("src", "")).strip_edges() != "":
 			return true
 	return false
+
+
+## 契约源码是否依赖"重击"(heavy_blow)触发
+static func _uses_heavy_blow(src: String) -> bool:
+	return src.contains("on heavy_blow")
 
 
 static func _hero_name(id: String) -> String:

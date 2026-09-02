@@ -63,6 +63,14 @@ func _test_swap_and_release() -> void:
 	EquipWeapon.equip(r, _mk_inst("w_1", "试剑"), "hero_2")
 	_check(EquipWeapon.loadout_of(r, "hero_3").is_empty() and not EquipWeapon.loadout_of(r, "hero_2").is_empty(),
 		"换手正常")
+	# 一人装新武器时,旧武器自动卸下(防止契约/面板串人)
+	EquipWeapon.equip(r, _mk_inst("w_2", "新剑"), "hero_2")
+	_check(str(EquipWeapon.loadout_of(r, "hero_2").get("instance_id", "")) == "w_2", "新武器上身")
+	var old_holder := ""
+	for w in r.weapons:
+		if str(w.get("instance_id", "")) == "w_1":
+			old_holder = str(w.get("holder_id", ""))
+	_check(old_holder == "", "旧武器自动卸下(holder 清空)")
 
 
 func _test_loadout_and_contract() -> void:

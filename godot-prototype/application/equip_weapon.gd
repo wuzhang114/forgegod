@@ -4,11 +4,18 @@
 extends RefCounted
 
 
-## 装备: 武器实例(库内存在则更新,否则追加)归属给 hero_id;其他英雄解除该武器引用
+## 装备: 武器实例(库内存在则更新,否则追加)归属给 hero_id;其他英雄解除该武器引用;
+## 该英雄原来的武器自动卸下(一人只需一把武器,防止契约/面板串人)。
 static func equip(run, instance: Dictionary, hero_id: String) -> Dictionary:
 	var iid := str(instance.get("instance_id", ""))
 	if iid == "":
 		return {"ok": false, "error": "instance without id"}
+	# 该英雄旧武器的持有关系解除(仅当换的是另一把)
+	var old_wid := _weapon_id_of(run, hero_id)
+	if old_wid != "" and old_wid != iid:
+		for w in run.weapons:
+			if str(w.get("instance_id", "")) == old_wid:
+				w["holder_id"] = ""
 	instance["holder_id"] = hero_id
 	var found := false
 	for w in run.weapons:
@@ -25,6 +32,13 @@ static func equip(run, instance: Dictionary, hero_id: String) -> Dictionary:
 		if str(m.get("id", "")) != hero_id and str(m.get("weapon_id", "")) == iid:
 			m["weapon_id"] = ""
 	return {"ok": true, "instance_id": iid}
+
+
+static func _weapon_id_of(run, hero_id: String) -> String:
+	for m in run.roster:
+		if str(m.get("id", "")) == hero_id:
+			return str(m.get("weapon_id", ""))
+	return ""
 
 
 ## 某英雄当前装备(旧实例壳;无则空 dict)
