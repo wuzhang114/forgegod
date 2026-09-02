@@ -860,7 +860,7 @@ func _build_ui() -> void:
 	add_btn.call("⏩ +3s", func(): _set_tick(play_tick + 60))
 	add_btn.call("跳到结束", func(): _set_tick(total_ticks))
 	add_btn.call("← 返回铁匠铺", func():
-		get_tree().change_scene_to_file("res://scenes/forge/forge_scene.tscn"))
+		GameApp.goto("forge"))
 	# 右侧技能面板(主动技集中;垂直排列)
 	ui.skill_box = VBoxContainer.new()
 	ui.skill_box.position = Vector2(1075, 250)

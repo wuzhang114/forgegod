@@ -96,7 +96,7 @@ func _build_ui() -> void:
 	ui.back.position = Vector2(80, 505)
 	ui.back.custom_minimum_size = Vector2(200, 32)
 	ui.back.pressed.connect(func():
-		get_tree().change_scene_to_file("res://scenes/forge/forge_scene.tscn"))
+		GameApp.goto("forge"))
 	add_child(ui.back)
 
 
@@ -154,4 +154,6 @@ func _on_accept() -> void:
 
 
 func _on_to_battle() -> void:
-	get_tree().change_scene_to_file("res://scenes/battle/battle_demo.tscn")
+	# 契约定稿同步进 RunState(存档基础)
+	GameApp.run.contract_src = str(Session.divine_contract.get("source", ""))
+	GameApp.goto("battle")

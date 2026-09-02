@@ -9,6 +9,10 @@ config/description="铁匠铺 x 锻造之神机制生成原型"
 run/main_scene="res://scenes/forge/forge_scene.tscn"
 config/features=PackedStringArray("4.6")
 
+[autoload]
+
+GameApp="*res://app/game_app.gd"
+
 [display]
 
 window/size/viewport_width=1280

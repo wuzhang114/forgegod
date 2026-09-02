@@ -56,6 +56,33 @@ func _ready() -> void:
 	_rebuild_right()
 	_update_facts()
 	_refresh_center()
+	_build_run_bar()
+
+
+## ---------------- 运行控制条(新游戏/继续/存档) ----------------
+
+func _build_run_bar() -> void:
+	var bar := HBoxContainer.new()
+	bar.position = Vector2(880, 20)
+	bar.add_theme_constant_override("separation", 8)
+	add_child(bar)
+	var mk := func(txt: String, cb: Callable) -> void:
+		var b := Button.new()
+		b.text = txt
+		b.pressed.connect(cb)
+		bar.add_child(b)
+	mk.call("💾 存档", func():
+		var res := GameApp.save_game()
+		ui.tip.text = "已存档 ✓" if res.get("ok", false) else "存档失败: %s" % str(res.get("error", "?")))
+	mk.call("📂 继续", func():
+		if GameApp.continue_game():
+			ui.tip.text = "已读取存档(第 %d 天)" % GameApp.run.current_day
+			_refresh_center()
+		else:
+			ui.tip.text = "没有存档")
+	mk.call("🌱 新游戏", func():
+		GameApp.new_game()
+		ui.tip.text = "新局已开(第 1 天)")
 
 
 ## ---------------- 静态 UI ----------------
@@ -68,6 +95,11 @@ func _build_static() -> void:
 	t.add_theme_font_size_override("font_size", 22)
 	t.add_theme_color_override("font_color", Color(1.0, 0.75, 0.5))
 	add_child(t)
+	ui.tip = Label.new()
+	ui.tip.position = Vector2(120, 48)
+	ui.tip.add_theme_font_size_override("font_size", 13)
+	ui.tip.modulate = Color(0.8, 0.8, 0.75)
+	add_child(ui.tip)
 	# 进度指示
 	ui.progress = Label.new()
 	ui.progress.position = Vector2(120, 56)
@@ -346,7 +378,10 @@ func _on_next() -> void:
 	if _is_finished() and not result_weapon.is_empty():
 		var Session := preload("res://core/flow/game_session.gd")
 		Session.weapon_facts = result_weapon
-		get_tree().change_scene_to_file("res://scenes/altar/altar_scene.tscn")
+		# 同步进 RunState(武器事实入档,后续武器库迁移目标)
+		GameApp.run.weapons = [{"instance_id": "w_1", "facts": result_weapon,
+			"durability": 100.0, "contract_src": ""}]
+		GameApp.goto("altar")
 		return
 	# 确定当前阶段
 	if not stage in done_stages:
