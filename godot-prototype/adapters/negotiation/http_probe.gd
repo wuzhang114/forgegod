@@ -17,8 +17,10 @@ static func probe(endpoint: String, key: String, model: String, timeout_s: int =
 		return {"ok": false, "error": "端点需为 http(s) 地址(可只填 base,如 https://api.deepseek.com)"}
 	var body := JSON.stringify({"model": model,
 		"messages": [{"role": "user", "content": "ping"}], "max_tokens": 8})
+	# 响应体收到临时文件: 失败时读取服务端错误原文(OpenAI 兼容错误带 message)
+	var tmp := "user://_probe_body.tmp"
 	var args := PackedStringArray([
-		"-s", "-o", "NUL", "-w", "%{http_code} %{time_total}",
+		"-s", "-o", ProjectSettings.globalize_path(tmp), "-w", "%{http_code} %{time_total}",
 		"--max-time", str(timeout_s),
 		"-H", "Content-Type: application/json",
 	])
@@ -34,10 +36,33 @@ static func probe(endpoint: String, key: String, model: String, timeout_s: int =
 	var parts := resp.split(" ")
 	var http_code := int(parts[0]) if parts.size() > 0 and parts[0].is_valid_int() else 0
 	var ms := float(parts[1] if parts.size() > 1 and parts[1].is_valid_float() else "0") * 1000.0
+	var detail := _read_body_detail(tmp)
 	if http_code == 200:
 		return {"ok": true, "latency_ms": ms, "endpoint": full}
-	return {"ok": false, "error": "HTTP %d(%s)" % [http_code, _explain_code(http_code, str(key).strip_edges() == "")],
-		"latency_ms": ms, "endpoint": full}
+	var why := _explain_code(http_code, str(key).strip_edges() == "")
+	if detail != "":
+		why += " — 服务端: " + detail
+	return {"ok": false, "error": "HTTP %d(%s)" % [http_code, why],
+		"latency_ms": ms, "endpoint": full, "server_detail": detail}
+
+
+## 读取服务端响应体(前 220 字符,提取 OpenAI 兼容错误 message)
+static func _read_body_detail(tmp: String) -> String:
+	if not FileAccess.file_exists(tmp):
+		return ""
+	var f := FileAccess.open(tmp, FileAccess.READ)
+	if f == null:
+		return ""
+	var txt := f.get_as_text()
+	f.close()
+	DirAccess.remove_absolute(tmp)
+	var parsed: Variant = JSON.parse_string(txt)
+	if typeof(parsed) == TYPE_DICTIONARY and parsed.has("error"):
+		var err: Variant = parsed.error
+		if typeof(err) == TYPE_DICTIONARY and err.has("message"):
+			return str(err.message).left(200)
+		return str(err).left(200)
+	return txt.left(200).replace("\n", " ")
 
 
 ## base 地址 -> 完整 chat 端点(url 尾部去斜杠;已含 /chat/completions 则原样)
