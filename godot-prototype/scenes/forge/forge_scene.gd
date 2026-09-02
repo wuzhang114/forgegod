@@ -13,6 +13,7 @@ const STAGES := [
 	{"id": "smith", "name": "② 锻打"},
 	{"id": "temper", "name": "③ 热处理"},
 	{"id": "assemble", "name": "④ 装配"},
+	{"id": "equip", "name": "⑤ 装备"},
 ]
 const KIND_CHOICES := [
 	{"id": "warhammer", "name": "战锤"},
@@ -42,6 +43,7 @@ var keep_stress := false
 var balance_bias := false
 var techniques: Array = []
 var weapon_name := "无名武器"
+var equipped_hero := ""                   # ⑤ 装备阶段选定的队友(写 RunState loadout)
 
 var ui: Dictionary = {}
 var rows: Dictionary = {}               # stage_id -> [控件]
@@ -301,6 +303,7 @@ func _rebuild_right() -> void:
 	_build_smith()
 	_build_temper()
 	_build_assemble()
+	_build_equip()
 	_apply_stage_ui()
 
 
@@ -415,6 +418,34 @@ func _build_assemble() -> void:
 		func(on: bool): balance_bias = on; _update_facts(); _refresh_center())
 
 
+## ⑤ 装备: 给队友换装备(装备者 -> RunState loadout;武器带进战斗)
+func _build_equip() -> void:
+	var EquipWeapon := preload("res://application/equip_weapon.gd")
+	for hero in [
+		{"id": "hero_1", "role": "guard", "name": "守卫·布兰特"},
+		{"id": "hero_2", "role": "duelist", "name": "连击手·莉娅"},
+		{"id": "hero_3", "role": "ranger", "name": "射手·锡拉"},
+	]:
+		var h := _row(ui.right, "equip")
+		var name_lbl := Label.new()
+		name_lbl.text = str(hero.name)
+		name_lbl.custom_minimum_size = Vector2(120, 0)
+		h.add_child(name_lbl)
+		var cur := EquipWeapon.loadout_of(GameApp.run, str(hero.id))
+		var cur_lbl := Label.new()
+		cur_lbl.text = "当前: " + (str(cur.get("facts", {}).get("name", "未装备"))
+			if not cur.is_empty() else "徒手(沿用演示武器)")
+		cur_lbl.custom_minimum_size = Vector2(200, 0)
+		h.add_child(cur_lbl)
+		var b := Button.new()
+		b.text = "装备此剑"
+		b.pressed.connect(func():
+			equipped_hero = str(hero.id)
+			ui.tip.text = "装备者: %s" % str(hero.name)
+			_apply_stage_ui())
+		h.add_child(b)
+
+
 ## ---------------- 基础属性面板(实时;唯一来源 ForgeCalculator) ----------------
 
 func _build_stats_panel() -> void:
@@ -496,7 +527,11 @@ func _on_tab_clicked(t: String) -> void:
 
 
 func _on_next() -> void:
-	# 已完成全部阶段 -> 消耗材料 -> 把武器送往神裁砧
+	# ⑤ 装备阶段必须选定装备者
+	if stage == "equip" and equipped_hero == "":
+		ui.tip.text = "先给队友装备这把剑(⑤ 装备页 点「装备此剑」)"
+		return
+	# 已完成全部阶段 -> 消耗材料 -> 写入装备 -> 送往神裁砧
 	if _is_finished() and not result_weapon.is_empty():
 		var Settlement := preload("res://application/settle_day.gd")
 		var Inventory := preload("res://domain/economy/inventory.gd")
@@ -507,9 +542,11 @@ func _on_next() -> void:
 		_refresh_runinfo()
 		var Session := preload("res://core/flow/game_session.gd")
 		Session.weapon_facts = result_weapon
-		# 同步进 RunState(武器事实入档,后续武器库迁移目标)
-		GameApp.run.weapons = [{"instance_id": "w_%d" % GameApp.run.current_day, "facts": result_weapon,
-			"durability": 100.0, "contract_src": ""}]
+		# 装备写入 RunState(武器实例入库 + 队伍 loadout)
+		var EquipWeapon := preload("res://application/equip_weapon.gd")
+		var instance := {"instance_id": "w_%d_%s" % [GameApp.run.current_day, Time.get_ticks_msec()],
+			"facts": result_weapon, "durability": 100.0, "contract_src": ""}
+		EquipWeapon.equip(GameApp.run, instance, equipped_hero)
 		GameApp.goto("altar")
 		return
 	# 确定当前阶段
@@ -607,7 +644,8 @@ func _apply_stage_ui() -> void:
 		for i in STAGES.size():
 			if STAGES[i].id == stage:
 				if i + 1 < STAGES.size():
-					nxt = STAGES[i + 1].name.replace("① ", "").replace("② ", "").replace("③ ", "").replace("④ ", "")
+					nxt = STAGES[i + 1].name.replace("① ", "").replace("② ", "").replace("③ ", "")
+					.replace("④ ", "").replace("⑤ ", "")
 		ui.next_btn.text = "确定并进入下一步(%s) >" % nxt
 
 

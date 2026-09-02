@@ -160,6 +160,14 @@ func _on_accept() -> void:
 		return
 	var res := Session.commit_contract(str(turn.draft))
 	if res.ok:
+		# 契约定稿写回武器实例(equip 的武器;战斗按装备者挂契约)
+		var EquipWeapon := preload("res://application/equip_weapon.gd")
+		var wep := EquipWeapon.weapon_with_contract(GameApp.run)
+		if not wep.is_empty():
+			EquipWeapon.equip(GameApp.run, {
+				"instance_id": str(wep.get("instance_id", "w_x")),
+				"contract_src": str(Session.divine_contract.get("source", ""))},
+				str(wep.get("holder_id", "hero_1")))
 		_say("你", "我接受这份契约。")
 		_say("神", "刻印已成。去让沙场替我作证。")
 		ui.accept.visible = false

@@ -251,9 +251,15 @@ func _run_battle(skill_entries: Array) -> void:
 	var schecked := Checker.new().check(sast.ast)
 	var last := Parser.new().parse(str(ContentRegistry.contract_template("lifesteal").src))
 	var lchecked := Checker.new().check(last.ast)
+	# 玩家契约(神裁定稿)挂到"装备者";未装备兜底 hero_1
+	var EquipWeapon := preload("res://application/equip_weapon.gd")
+	var player_weapon := EquipWeapon.weapon_with_contract(GameApp.run)
+	var player_holder := str(player_weapon.get("holder_id", "hero_1"))
+	if player_holder == "":
+		player_holder = "hero_1"
 	# 多个契约共享同一武器对象: 任一契约扣耐久,UI 与另一契约都能读到(用户可见)
 	var weapon := _battle_weapon()
-	sim.add_contract("c_bulwark", checked.ast, "hero_1", weapon)
+	sim.add_contract("c_bulwark", checked.ast, player_holder, weapon)
 	sim.add_contract("c_quake", qchecked.ast, "hero_1", weapon)
 	sim.add_contract("c_scorch", schecked.ast, "hero_3", weapon)
 	sim.add_contract("c_life", lchecked.ast, "hero_2", weapon)
@@ -274,7 +280,7 @@ func _run_battle(skill_entries: Array) -> void:
 		run.add_entity(_make_entity(e))
 	# 快照重放侧同样共享武器对象(与 sim 侧独立,互不串场)
 	var weapon_run := _battle_weapon()
-	run.add_contract("c_bulwark", checked.ast, "hero_1", weapon_run)
+	run.add_contract("c_bulwark", checked.ast, player_holder, weapon_run)
 	run.add_contract("c_quake", qchecked.ast, "hero_1", weapon_run)
 	run.add_contract("c_scorch", schecked.ast, "hero_3", weapon_run)
 	run.add_contract("c_life", lchecked.ast, "hero_2", weapon_run)
@@ -334,8 +340,13 @@ func _make_entity(e: Dictionary) -> Dictionary:
 	opt = opt.duplicate()
 	opt.grid = e.grid
 	if is_hero:
-		# 队伍武器面板: 玩家锻造产物(全流程)或演示默认均衡武器
-		WeaponStats.apply_to_opt(opt, _weapon_stats())
+		# 武器面板按"装备"归属: 该英雄装上锻造武器 -> 用其事实,战斗生效;未装备 -> 演示默认
+		var EquipWeapon := preload("res://application/equip_weapon.gd")
+		var inst := EquipWeapon.loadout_of(GameApp.run, e.id)
+		if not inst.is_empty():
+			WeaponStats.apply_to_opt(opt, WeaponStats.from_facts(inst.get("facts", {})))
+		else:
+			WeaponStats.apply_to_opt(opt, _weapon_stats())
 	return DefEntity.make(e.id, ("hero" if is_hero else "enemy"),
 		("player" if is_hero else "enemy"), e.name, role, opt)
 

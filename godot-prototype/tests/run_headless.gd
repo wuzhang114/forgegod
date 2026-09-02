@@ -27,6 +27,7 @@ const ContentRegistryTests := preload("res://tests/test_content_registry.gd")
 const SettlementTests := preload("res://tests/test_settlement.gd")
 const NegotiationTests := preload("res://tests/test_negotiation_adapter.gd")
 const ExplainerTests := preload("res://tests/test_contract_explainer.gd")
+const EquipTests := preload("res://tests/test_equip_weapon.gd")
 const ForgeTests := preload("res://tests/test_forge.gd")
 const GodTests := preload("res://tests/test_scripted_god.gd")
 const BalanceTests := preload("res://tests/test_balance.gd")
@@ -801,6 +802,7 @@ func _initialize() -> void:
 	_test_settlement()
 	_test_negotiation()
 	_test_explainer()
+	_test_equip()
 	_test_forge_core()
 	_test_scripted_god()
 	_test_balance()
@@ -1798,6 +1800,13 @@ func _test_explainer() -> void:
 	var r: Dictionary = t.run()
 	print("-- 契约说明/神祇配置: 通过 %d / 失败 %d --" % [r.pass, r.fail])
 	_check(r.ok, "契约说明测试全绿")
+
+
+func _test_equip() -> void:
+	var t := EquipTests.new()
+	var r: Dictionary = t.run()
+	print("-- 装备用例: 通过 %d / 失败 %d --" % [r.pass, r.fail])
+	_check(r.ok, "装备用例测试全绿")
 
 
 func _test_forge_core() -> void:
