@@ -14,6 +14,7 @@ var _fails := 0
 func run() -> Dictionary:
 	_test_probe_fail_fast()
 	_test_probe_incomplete()
+	_test_normalize_endpoint()
 	_test_context_builder()
 	_test_prepare_cache()
 	return {"ok": _fails == 0, "pass": _passes, "fail": _fails}
@@ -37,8 +38,24 @@ func _test_probe_fail_fast() -> void:
 
 
 func _test_probe_incomplete() -> void:
-	_check(not HttpProbe.probe("", "", "").get("ok", false), "未填写 -> 直接失败")
-	_check(not HttpProbe.probe("http://x", "", "m").get("ok", false), "缺密钥 -> 失败")
+	_check(not HttpProbe.probe("", "", "m").get("ok", false), "端点空 -> 直接失败")
+	_check(not HttpProbe.probe("http://x", "", "").get("ok", false), "模型空 -> 失败")
+	# 密钥框误填网址 -> 立即拦截(不发网络)
+	var r := HttpProbe.probe("https://api.deepseek.com/chat/completions",
+		"https://api.deepseek.com", "deepseek-chat")
+	_check(not r.get("ok", false) and str(r.error).contains("密钥框"), "密钥误填网址被拦截")
+
+
+func _test_normalize_endpoint() -> void:
+	_check(HttpProbe.normalize_endpoint("https://api.deepseek.com") == "https://api.deepseek.com/chat/completions",
+		"base 自动补全")
+	_check(HttpProbe.normalize_endpoint("https://api.deepseek.com/") == "https://api.deepseek.com/chat/completions",
+		"尾部斜杠容错")
+	_check(HttpProbe.normalize_endpoint("https://api.deepseek.com/v1") == "https://api.deepseek.com/v1/chat/completions",
+		"/v1 base 补全")
+	_check(HttpProbe.normalize_endpoint("https://api.deepseek.com/v1/chat/completions") == "https://api.deepseek.com/v1/chat/completions",
+		"完整端点原样")
+	_check(HttpProbe.normalize_endpoint("api.deepseek.com") == "", "非 http 拒绝")
 
 
 func _test_context_builder() -> void:
