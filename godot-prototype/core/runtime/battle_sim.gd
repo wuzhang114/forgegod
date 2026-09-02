@@ -282,10 +282,9 @@ func tick_once() -> void:
 	_tick_summons()
 	_tick_cell_effects()
 	_tick_pending_hits()
-	# 状态到期
-	if tick % 50 == 0:
-		for ent in entities.values():
-			DefEntity.tick_statuses(ent)
+	# 状态到期(每 tick 衰减;ticks 语义 = 20Hz tick,如 60 = 3 秒)
+	for ent in entities.values():
+		DefEntity.tick_statuses(ent)
 	# 契约定时器(每 20 tick)
 	if tick % 20 == 0:
 		_broadcast("timer", {"tick": tick})

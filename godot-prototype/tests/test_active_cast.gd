@@ -103,6 +103,11 @@ func _test_cast_end_to_end() -> void:
 		if entry.get("cmd") == "active" and int(entry.get("tick", -1)) == 10:
 			scheduled = true
 	_check(scheduled, "input_log 记录主动指令")
+	# 眩晕 60 tick(3 秒)后解除,不是永久
+	for i in 80:
+		sim.tick_once()
+	_check(not DefEntity.has_status(mob1, "stunned"), "60 tick 眩晕自然解除")
+	_check(not DefEntity.has_status(ally, "stunned"), "友军同步解除")
 
 
 func _test_stun_blocks_move() -> void:
