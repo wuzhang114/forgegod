@@ -1,0 +1,29 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+issueTrackerURL="https://example.invalid/forgegod"
+[[mods]]
+modId="forgegod"
+version="0.1.0"
+displayName="ForgeGod"
+authors="ForgeGod Prototype"
+description='''AI-assisted Tetra forging prototype with validated divine trials.'''
+
+[[dependencies.forgegod]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+[[dependencies.forgegod]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"
+[[dependencies.forgegod]]
+    modId="tetra"
+    mandatory=true
+    versionRange="[6.17.0,)"
+    ordering="AFTER"
+    side="BOTH"

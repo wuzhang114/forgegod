@@ -573,3 +573,13 @@ M1 上游:WeaponFacts 自动生成(从部件/材料/工序产出事实卡片)→
 ### 调研
 
 - 6 个开源自走棋项目源码研读(teamfight-simulator / pumpkye / pokemonAutoChess / tft-modeling / battler / cingfong)→ docs/autochess-research.md
+
+## 2026-09-02(收尾2): 仓库清理与文档更新
+
+- 删除(历史可恢复):
+  - minecraft-mod-prototype/(50 文件,MC Mod 早期原型,技术原则已全部迁移 Godot 原型)
+  - tmp/(旧预览 avi + AI 绘图提示词)
+  - output/imagegen/(素材原稿 11 张;4 张战斗图在 assets/battle 有 MD5 一致副本)
+  - 本地 _research/(6 个自走棋调研 clone,仅本地)
+- .gitignore 移除 Minecraft 段(保留 _research/ 排除)。
+- README 重写:当前状态(3 主动技/DoT/灼烧/武器面板/155 测试)、目录结构、文档索引加 docs/autochess-research.md。

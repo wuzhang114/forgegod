@@ -1,0 +1,28 @@
+{
+  "trigger": "tetra:on_use",
+  "effect": "forgegod/da37661e_2fb4_4c1e_ac98_37fee7088057/spark_sprites",
+  "outcome": {
+    "type": "tetra:multiple",
+    "outcomes": [
+      {
+        "type": "tetra:particle",
+        "particle": {
+          "type": "minecraft:enchanted_hit"
+        },
+        "count": 8,
+        "speed": 0.04,
+        "spread": [
+          0.35,
+          0.35,
+          0.35
+        ]
+      },
+      {
+        "type": "tetra:sound",
+        "sound": "minecraft:block.amethyst_block.chime",
+        "volume": 0.7,
+        "pitch": 1.2
+      }
+    ]
+  }
+}

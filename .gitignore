@@ -4,14 +4,6 @@ godot-prototype/.godot/
 godot-prototype/.mono/
 .godot/
 
-# --- Minecraft Mod(构建产物/运行产物) ---
-minecraft-mod-prototype/forgegod-mod/.gradle/
-minecraft-mod-prototype/forgegod-mod/build/
-minecraft-mod-prototype/forgegod-mod/run/
-minecraft-mod-prototype/forgegod-mod/run-test-client.bat
-*.jar
-!minecraft-mod-prototype/*.md
-
 # --- 一般 ---
 *.log
 .vscode/

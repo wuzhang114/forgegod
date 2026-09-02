@@ -1,0 +1,17 @@
+{
+  "blueprint_version": 1,
+  "contract_id": "da37661e-2fb4-4c1e-ac98-37fee7088057",
+  "candidate": "candidate_v3",
+  "name": "焰刃火花",
+  "fantasy": "锻造之神将火花小精灵的灵性融入剑刃，使每次命中时迸发短暂焰光，并召唤小精灵环绕协助。",
+  "cited_fact_ids": [
+    "item.tetra:modular_sword",
+    "weapon.tetra_modular"
+  ],
+  "limits": {
+    "cooldown_ticks": 200,
+    "max_spawned_entities": 1,
+    "max_lifetime_ticks": 60,
+    "max_steps_per_trigger": 24
+  }
+}
