@@ -59,8 +59,7 @@ var speed := 1.0
 var paused := false
 var total_ticks := 0
 var ui: Dictionary = {}
-var contract_src := ""          # 从 GameSession 读取的契约(若无则内置蓄能盾击)
-var contract_name := "蓄能盾击"
+var active_skills: Array = []        # [{sid, label}] 本场主动技(有 right_click 的契约;动态生成)
 var battle_map: Dictionary = {}
 var map_rng := RandomNumberGenerator.new()
 var background_texture: Texture2D
@@ -83,21 +82,11 @@ var unit_nodes: Dictionary = {}      # eid -> UnitNode
 func _ready() -> void:
 	# 背景和单位都按最近邻采样，保留像素簇的硬边缘。
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_ready_contract()
 	_build_ui()
 	map_rng.randomize()
 	_select_battle_map()
 	_setup_deploy()
 	_process_ui()
-
-
-## 从会话读契约(全流程);否则用内置演示契约(ContentRegistry)
-func _ready_contract() -> void:
-	contract_src = str(ContentRegistry.contract_template("bulwark").src)
-	var Session := preload("res://core/flow/game_session.gd")
-	if not Session.divine_contract.is_empty() and str(Session.divine_contract.get("source", "")).strip_edges() != "":
-		contract_src = str(Session.divine_contract.source)
-		contract_name = "玩家神赐契约"
 
 
 ## ---------------- 坐标 ----------------
@@ -237,37 +226,48 @@ func _run_seed_of() -> int:
 	return GameApp.run.run_seed
 
 
-## 构造并运行一场战斗;skill_entries = [{cid, at}] 玩家主动技输入(确定性重模拟)
+## 构造并运行一场战斗;skill_entries = [{sid, at}] 玩家主动技输入(确定性重模拟)
 func _run_battle(skill_entries: Array) -> void:
 	sim = BattleSim.new(sim_seed)
 	sim.configure_board(_board_bounds())
 	for e in deploy_entities:
 		sim.add_entity(_make_entity(e))
-	var ast := Parser.new().parse(contract_src)
-	var checked := Checker.new().check(ast.ast)
-	var qast := Parser.new().parse(str(ContentRegistry.contract_template("quake").src))
-	var qchecked := Checker.new().check(qast.ast)
-	var sast := Parser.new().parse(str(ContentRegistry.contract_template("scorch").src))
-	var schecked := Checker.new().check(sast.ast)
-	var last := Parser.new().parse(str(ContentRegistry.contract_template("lifesteal").src))
-	var lchecked := Checker.new().check(last.ast)
-	# 玩家契约(神裁定稿)挂到"装备者";未装备兜底 hero_1
-	var EquipWeapon := preload("res://application/equip_weapon.gd")
-	var player_weapon := EquipWeapon.weapon_with_contract(GameApp.run)
-	var player_holder := str(player_weapon.get("holder_id", "hero_1"))
-	if player_holder == "":
-		player_holder = "hero_1"
+	# 契约从 RunState 武器库加载(每实例每契约;持有者 = 实例 holder)
+	var contract_pairs: Array = []        # [{sid, ast, holder}]
+	for inst in GameApp.run.weapons:
+		var holder := str(inst.get("holder_id", ""))
+		if holder == "":
+			continue
+		var wname := str(inst.get("facts", {}).get("name", "无名武器"))
+		for c in inst.get("contracts", []):
+			var src := str(c.get("src", "")).strip_edges()
+			if src == "":
+				continue
+			var parsed := Parser.new().parse(src)
+			if not parsed.ok:
+				continue
+			var checked2 := Checker.new().check(parsed.ast)
+			if not checked2.ok:
+				continue
+			contract_pairs.append({"sid": "%s@%s" % [str(inst.instance_id), str(c.cid)],
+				"ast": parsed.ast, "holder": holder,
+				"has_active": _has_active_trigger(parsed.ast),
+				"label": "%s·%s" % [wname, str(c.cid).replace("c_", "神赐/主动")]})
 	# 多个契约共享同一武器对象: 任一契约扣耐久,UI 与另一契约都能读到(用户可见)
 	var weapon := _battle_weapon()
-	sim.add_contract("c_bulwark", checked.ast, player_holder, weapon)
-	sim.add_contract("c_quake", qchecked.ast, "hero_1", weapon)
-	sim.add_contract("c_scorch", schecked.ast, "hero_3", weapon)
-	sim.add_contract("c_life", lchecked.ast, "hero_2", weapon)
+	for cp in contract_pairs:
+		sim.add_contract(str(cp.sid), cp.ast, str(cp.holder), weapon)
 	for entry in skill_entries:
-		sim.schedule_active(str(entry.cid), int(entry.at))
+		sim.schedule_active(str(entry.sid), int(entry.at))
 	sim.run(4800)  # 上限 240 秒(3 倍血长线战斗;超时不判胜负则按未分晓收尾)
 	total_ticks = maxi(sim.tick, 1)
 	effects = sim.events.duplicate(true)
+	# 主动技能按钮集(本场有 right_click 的契约)
+	active_skills = []
+	for cp in contract_pairs:
+		if cp.get("has_active", false):
+			active_skills.append({"sid": str(cp.sid), "label": str(cp.label)})
+	_rebuild_skill_buttons()
 	# 战报(结构化结果;第 4 步结算消费)
 	var scenario := BattleScenario.new()
 	scenario.init_build(str(battle_map.id), current_pack_id, sim_seed, [], [])
@@ -280,12 +280,10 @@ func _run_battle(skill_entries: Array) -> void:
 		run.add_entity(_make_entity(e))
 	# 快照重放侧同样共享武器对象(与 sim 侧独立,互不串场)
 	var weapon_run := _battle_weapon()
-	run.add_contract("c_bulwark", checked.ast, player_holder, weapon_run)
-	run.add_contract("c_quake", qchecked.ast, "hero_1", weapon_run)
-	run.add_contract("c_scorch", schecked.ast, "hero_3", weapon_run)
-	run.add_contract("c_life", lchecked.ast, "hero_2", weapon_run)
+	for cp in contract_pairs:
+		run.add_contract(str(cp.sid), cp.ast, str(cp.holder), weapon_run)
 	for entry in skill_entries:
-		run.schedule_active(str(entry.cid), int(entry.at))
+		run.schedule_active(str(entry.sid), int(entry.at))
 	snapshots = []
 	# 清理上一次战斗残留的纸片人(重开战斗时必须释放旧节点,否则幽灵残影叠加)
 	for u in unit_nodes.values():
@@ -323,8 +321,12 @@ func _snap_of(run_) -> Dictionary:
 			"alive": e.alive, "role": e.get("role", ""),
 			"stun": 1 if DefEntity.has_status(e, "stunned") else 0}
 	snap["__contract"] = {}
-	if run_.contracts.has("c_bulwark"):
-		snap["__contract"]["charge"] = float(run_.contracts["c_bulwark"].vm.get_state().get("charge", 0.0))
+	# 蓄能(首个含 heavy_blow 反应的契约)储能展示: 任意契约优先取 state.charge
+	for cid2 in run_.contracts.keys():
+		var cst: Dictionary = run_.contracts[cid2].vm.get_state()
+		if cst.has("charge"):
+			snap["__contract"]["charge"] = float(cst.get("charge", 0.0))
+			break
 	# 格效果(灼烧格等)进快照: 回放与第一遍表现一致
 	snap["__cells"] = []
 	for fx2 in run_.cell_effects.values():
@@ -351,8 +353,12 @@ func _make_entity(e: Dictionary) -> Dictionary:
 		("player" if is_hero else "enemy"), e.name, role, opt)
 
 
-## 当前武器统计面板(锻造产物 -> 战斗数值;演示时用默认均衡武器)
+## 当前武器统计面板: 优先带契约的已装备武器(神裁那件),其次本届锻造,最后演示默认
 func _weapon_stats() -> Dictionary:
+	var EquipWeapon := preload("res://application/equip_weapon.gd")
+	var w := EquipWeapon.weapon_with_contract(GameApp.run)
+	if not w.is_empty() and not w.get("facts", {}).is_empty():
+		return WeaponStats.from_facts(w.get("facts", {}))
 	var Session := preload("res://core/flow/game_session.gd")
 	return WeaponStats.from_facts(Session.weapon_facts) \
 		if not Session.weapon_facts.is_empty() else WeaponStats.default_stats()
@@ -393,21 +399,29 @@ func _set_tick(t: int) -> void:
 	_dispatch_effects(play_tick)
 
 
-## 玩家手动释放主动技(cid): 以当前播放点为输入,注入 right_click 指令并确定性重模拟。
+## 玩家手动释放主动技(sid = 契约实例 id): 以当前播放点为输入,注入 right_click 指令并确定性重模拟。
 ## 第一遍 = 纯实时战斗: 施放后原地续播(不闪回、不暂停),技能立即生效;
 ## 战斗结束后进入回放模式(时间轴可自由拖动回看本局)。
-func _cast_active(cid: String) -> void:
+func _cast_active(sid: String) -> void:
 	if phase != "playing" or play_tick >= total_ticks:
 		return
-	if sim == null or not sim.contracts.has(cid):
+	if sim == null or not sim.contracts.has(sid):
 		return
 	var cast_at := maxi(play_tick, 1)
 	# 输入累积: 保留此前已施放的所有技能,本场时间线保持一致
-	skill_log.append({"cid": cid, "at": cast_at})
+	skill_log.append({"sid": sid, "at": cast_at})
 	_run_battle(skill_log)
 	_set_tick(cast_at)
 	paused = false
 	_acc = 0.0
+
+
+## 返回铁匠铺: 先结算(幂等: 同一 scenario 只结算一次),再导航
+func _settle_and_return() -> void:
+	if not last_report.is_empty():
+		var Settlement := preload("res://application/settle_day.gd")
+		Settlement.settle(GameApp.run, last_report)
+	GameApp.goto("forge")
 
 
 func _update_units(animate: bool = true) -> void:
@@ -811,30 +825,17 @@ func _build_ui() -> void:
 	add_btn.call("跳到结束", func(): _set_tick(total_ticks))
 	add_btn.call("← 返回铁匠铺", func():
 		_settle_and_return())
-
-## 返回铁匠铺: 先结算(幂等: 同一 scenario 只结算一次),再导航
-func _settle_and_return() -> void:
-	if not last_report.is_empty():
-		var Settlement := preload("res://application/settle_day.gd")
-		Settlement.settle(GameApp.run, last_report)
-	GameApp.goto("forge")
-	# 右侧技能面板(主动技集中;垂直排列)
+	# 右侧技能面板(主动技集中;垂直排列,按钮按武器库契约动态生成)
 	ui.skill_box = VBoxContainer.new()
+	ui.skill_buttons = []
 	ui.skill_box.position = Vector2(1075, 250)
 	ui.skill_box.add_theme_constant_override("separation", 10)
 	add_child(ui.skill_box)
-	ui.cast_btn = Button.new()
-	ui.cast_btn.text = "🔥 震地眩晕\n(守卫·周围2格)"
-	ui.cast_btn.pressed.connect(func(): _cast_active("c_quake"))
-	ui.skill_box.add_child(ui.cast_btn)
-	ui.scorch_btn = Button.new()
-	ui.scorch_btn.text = "🔥 灼烧之种\n(射手·目标格)"
-	ui.scorch_btn.pressed.connect(func(): _cast_active("c_scorch"))
-	ui.skill_box.add_child(ui.scorch_btn)
-	ui.life_btn = Button.new()
-	ui.life_btn.text = "🌿 嗜血之舞\n(连击手·3次攻速+吸血)"
-	ui.life_btn.pressed.connect(func(): _cast_active("c_life"))
-	ui.skill_box.add_child(ui.life_btn)
+	ui.cast_empty = Label.new()
+	ui.cast_empty.text = "(无主动技)"
+	ui.cast_empty.modulate = Color(0.6, 0.6, 0.6)
+	ui.cast_empty.visible = false
+	ui.skill_box.add_child(ui.cast_empty)
 	# 时间轴滑杆(重放: 拖动任意跳转)
 	ui.slider = HSlider.new()
 	ui.slider.min_value = 0.0
@@ -889,9 +890,10 @@ func _process_ui() -> void:
 	ui.weapon.text = "武器 %s · 攻×%.2f · 暴×%.2f · 破甲+%.0f · 独立+%.0f%%" % [
 		wname, ws.atk_mult, ws.crit_mult, ws.shred * 100.0, ws.wbonus * 100.0]
 	if phase == "playing":
-		# 耐久由契约 host 侧武器对象(SimHost 扣减真实生效)
-		if sim != null and sim.contracts.has("c_bulwark"):
-			var w: Dictionary = sim.contracts["c_bulwark"].host.weapon
+		# 耐久由契约 host 侧武器对象(SimHost 扣减真实生效;任一契约的武器即公共耐久对象)
+		if sim != null and not sim.contracts.is_empty():
+			var pcid: String = str(sim.contracts.keys()[0])
+			var w: Dictionary = sim.contracts[pcid].host.weapon
 			ui.weapon.text += " · 耐久 %.0f/%.0f" % [
 				float(w.get("durability", 0.0)), float(w.get("max_durability", 100.0))]
 		var st := "进行中…"
@@ -905,31 +907,56 @@ func _process_ui() -> void:
 			var snap: Dictionary = snapshots[clampi(play_tick, 0, snapshots.size() - 1)]
 			charge = float(snap.get("__contract", {}).get("charge", 0.0))
 		ui.contract.text = "【蓄能盾击】储能 %.1f/8" % charge
-		# 主动技按钮冷却状态(契约侧 cooldown_until 驱动)
-		_refresh_skill_btn(ui.cast_btn, "c_quake", "🔥 震地眩晕\n(守卫·周围2格)")
-		_refresh_skill_btn(ui.scorch_btn, "c_scorch", "🔥 灼烧之种\n(射手·目标格)")
-		_refresh_skill_btn(ui.life_btn, "c_life", "🌿 嗜血之舞\n(连击手·3次攻速+吸血)")
+		# 主动技按钮冷却状态(契约侧 cooldown_until 驱动;动态按钮)
+		for btn_data in ui.skill_buttons:
+			_refresh_skill_btn(btn_data.btn, str(btn_data.sid), str(btn_data.label))
 		# 重放提示
 		ui.tip.text = "拖动下方时间轴可回看任意时刻(自动暂停);⏮/⏪/⏩ 跳跃浏览"
 	else:
 		ui.status.text = "布阵阶段: 左侧部署区 2×3 起步 · 中央空列 · 右侧敌方部署区"
 		ui.contract.text = ""
-		ui.cast_btn.text = "🔥 震地眩晕\n(战斗中可放)"
-		ui.cast_btn.disabled = true
-		ui.scorch_btn.text = "🔥 灼烧之种\n(战斗中可放)"
-		ui.scorch_btn.disabled = true
-		ui.life_btn.text = "🌿 嗜血之舞\n(战斗中可放)"
-		ui.life_btn.disabled = true
+		for btn_data in ui.skill_buttons:
+			btn_data.btn.disabled = true
 
 
 ## 技能按钮冷却刷新(统一 冷却显示为秒)
-func _refresh_skill_btn(btn: Button, cid: String, base_txt: String) -> void:
-	if sim != null and sim.contracts.has(cid):
-		var cd_left := maxi(int(sim.contracts[cid].cooldown_until) - play_tick, 0)
+func _refresh_skill_btn(btn: Button, sid: String, base_txt: String) -> void:
+	if sim != null and sim.contracts.has(sid):
+		var cd_left := maxi(int(sim.contracts[sid].cooldown_until) - play_tick, 0)
 		btn.disabled = cd_left > 0
 		btn.text = (base_txt + "\n冷却 %s 秒") % _tick_s(cd_left) if cd_left > 0 else base_txt
 	else:
 		btn.disabled = true
+
+
+## 动态技能按钮重建(依据本场 active_skills;每次重模拟后刷新)
+func _rebuild_skill_buttons() -> void:
+	if not ui.has("skill_box"):
+		return
+	for c in ui.skill_box.get_children():
+		c.queue_free()
+	ui.skill_buttons = []
+	if active_skills.is_empty():
+		ui.cast_empty = Label.new()
+		ui.cast_empty.text = "(无主动技)"
+		ui.cast_empty.modulate = Color(0.6, 0.6, 0.6)
+		ui.skill_box.add_child(ui.cast_empty)
+		return
+	for sk in active_skills:
+		var b := Button.new()
+		b.text = str(sk.label)
+		var sid := str(sk.sid)
+		b.pressed.connect(func(): _cast_active(sid))
+		ui.skill_box.add_child(b)
+		ui.skill_buttons.append({"btn": b, "sid": sid, "label": str(sk.label)})
+
+
+## AST 是否有主动触发(right_click);用于动态生成技能按钮
+func _has_active_trigger(ast: Dictionary) -> bool:
+	for h in ast.get("handlers", []):
+		if str(h.get("event", "")) == "right_click":
+			return true
+	return false
 
 
 ## tick -> 秒(1 位小数)

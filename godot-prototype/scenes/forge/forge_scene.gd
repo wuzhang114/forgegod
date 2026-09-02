@@ -13,7 +13,6 @@ const STAGES := [
 	{"id": "smith", "name": "② 锻打"},
 	{"id": "temper", "name": "③ 热处理"},
 	{"id": "assemble", "name": "④ 装配"},
-	{"id": "equip", "name": "⑤ 装备"},
 ]
 const KIND_CHOICES := [
 	{"id": "warhammer", "name": "战锤"},
@@ -43,7 +42,6 @@ var keep_stress := false
 var balance_bias := false
 var techniques: Array = []
 var weapon_name := "无名武器"
-var equipped_hero := ""                   # ⑤ 装备阶段选定的队友(写 RunState loadout)
 
 var ui: Dictionary = {}
 var rows: Dictionary = {}               # stage_id -> [控件]
@@ -147,6 +145,12 @@ func _build_god_panel() -> void:
 	v.add_child(l1)
 	ui.local_endpoint = LineEdit.new()
 	v.add_child(ui.local_endpoint)
+	var l1b := Label.new()
+	l1b.text = "本地模型名"
+	v.add_child(l1b)
+	ui.local_model = LineEdit.new()
+	ui.local_model.placeholder_text = "如 qwen2.5:7b"
+	v.add_child(ui.local_model)
 	var l2 := Label.new()
 	l2.text = "本地 AI 密钥"
 	v.add_child(l2)
@@ -160,6 +164,12 @@ func _build_god_panel() -> void:
 	v.add_child(l3)
 	ui.remote_endpoint = LineEdit.new()
 	v.add_child(ui.remote_endpoint)
+	var l3b := Label.new()
+	l3b.text = "云端模型名"
+	v.add_child(l3b)
+	ui.remote_model = LineEdit.new()
+	ui.remote_model.placeholder_text = "如 deepseek-chat"
+	v.add_child(ui.remote_model)
 	var l4 := Label.new()
 	l4.text = "云端 AI 密钥"
 	v.add_child(l4)
@@ -169,19 +179,43 @@ func _build_god_panel() -> void:
 	# 保存
 	var save_row := HBoxContainer.new()
 	var save := Button.new()
-	save.text = "💾 保存神祇配置"
+	save.text = "💾 保存并检测连接"
 	save.pressed.connect(func():
+		var mode: String = ["scripted", "local", "remote"][ui.god_mode.selected]
 		var cfg := {
-			"god_mode": ["scripted", "local", "remote"][ui.god_mode.selected],
+			"god_mode": mode,
 			"local_endpoint": ui.local_endpoint.text.strip_edges(),
 			"local_key": ui.local_key.text.strip_edges(),
+			"local_model": ui.local_model.text.strip_edges(),
 			"remote_endpoint": ui.remote_endpoint.text.strip_edges(),
 			"remote_key": ui.remote_key.text.strip_edges(),
+			"remote_model": ui.remote_model.text.strip_edges(),
 		}
 		var res := GodConfig.save_config(cfg)
+		if not res.get("ok", false):
+			ui.tip.text = "保存失败: %s" % str(res.get("error", "?"))
+			return
 		GameApp.run.world_flags["god_mode"] = GodConfig.effective_mode(cfg)
-		ui.tip.text = "神祇配置已保存 ✓(当前: %s)" % cfg.get("god_mode", "scripted") \
-			if res.get("ok", false) else "保存失败: %s" % str(res.get("error", "?")))
+		if mode == "scripted":
+			ui.tip.text = "神祇配置已保存 ✓(内置脚本神)"
+			return
+		# 立即检测连接 + 预加载神裁上下文(避免交涉时首轮卡顿)
+		var endpoint := str(cfg.local_endpoint if mode == "local" else cfg.remote_endpoint)
+		var key := str(cfg.local_key if mode == "local" else cfg.remote_key)
+		var model := str(cfg.local_model if mode == "local" else cfg.remote_model)
+		ui.tip.text = "检测「%s」连接中(最长 5 秒)…" % endpoint
+		await get_tree().process_frame
+		var HttpProbe := preload("res://adapters/negotiation/http_probe.gd")
+		var pr := HttpProbe.probe(endpoint, key, model)
+		if pr.get("ok", false):
+			var Session := preload("res://core/flow/game_session.gd")
+			var LocalAdapter := preload("res://adapters/negotiation/local_ai_adapter.gd")
+			LocalAdapter.new().prepare_context(Session.weapon_facts)
+			GameApp.run.world_flags["god_ctx_ready"] = true
+			ui.tip.text = "连接成功 ✓ 延迟 %.0fms,神裁上下文已预加载" % float(pr.latency_ms)
+		else:
+			GameApp.run.world_flags["god_mode"] = "scripted"
+			ui.tip.text = "连接失败: %s(已回退脚本神,可修改后重试)" % str(pr.get("error", "?")))
 	save_row.add_child(save)
 	var close := Button.new()
 	close.text = "关闭"
@@ -193,8 +227,10 @@ func _build_god_panel() -> void:
 	ui.god_mode.selected = ["scripted", "local", "remote"].find(str(c.get("god_mode", "scripted")))
 	ui.local_endpoint.text = str(c.get("local_endpoint", ""))
 	ui.local_key.text = str(c.get("local_key", ""))
+	ui.local_model.text = str(c.get("local_model", ""))
 	ui.remote_endpoint.text = str(c.get("remote_endpoint", ""))
 	ui.remote_key.text = str(c.get("remote_key", ""))
+	ui.remote_model.text = str(c.get("remote_model", ""))
 	ui.god_panel = Panel
 	ui.god_panel.visible = false
 
@@ -303,7 +339,6 @@ func _rebuild_right() -> void:
 	_build_smith()
 	_build_temper()
 	_build_assemble()
-	_build_equip()
 	_apply_stage_ui()
 
 
@@ -418,34 +453,6 @@ func _build_assemble() -> void:
 		func(on: bool): balance_bias = on; _update_facts(); _refresh_center())
 
 
-## ⑤ 装备: 给队友换装备(装备者 -> RunState loadout;武器带进战斗)
-func _build_equip() -> void:
-	var EquipWeapon := preload("res://application/equip_weapon.gd")
-	for hero in [
-		{"id": "hero_1", "role": "guard", "name": "守卫·布兰特"},
-		{"id": "hero_2", "role": "duelist", "name": "连击手·莉娅"},
-		{"id": "hero_3", "role": "ranger", "name": "射手·锡拉"},
-	]:
-		var h := _row(ui.right, "equip")
-		var name_lbl := Label.new()
-		name_lbl.text = str(hero.name)
-		name_lbl.custom_minimum_size = Vector2(120, 0)
-		h.add_child(name_lbl)
-		var cur := EquipWeapon.loadout_of(GameApp.run, str(hero.id))
-		var cur_lbl := Label.new()
-		cur_lbl.text = "当前: " + (str(cur.get("facts", {}).get("name", "未装备"))
-			if not cur.is_empty() else "徒手(沿用演示武器)")
-		cur_lbl.custom_minimum_size = Vector2(200, 0)
-		h.add_child(cur_lbl)
-		var b := Button.new()
-		b.text = "装备此剑"
-		b.pressed.connect(func():
-			equipped_hero = str(hero.id)
-			ui.tip.text = "装备者: %s" % str(hero.name)
-			_apply_stage_ui())
-		h.add_child(b)
-
-
 ## ---------------- 基础属性面板(实时;唯一来源 ForgeCalculator) ----------------
 
 func _build_stats_panel() -> void:
@@ -527,11 +534,7 @@ func _on_tab_clicked(t: String) -> void:
 
 
 func _on_next() -> void:
-	# ⑤ 装备阶段必须选定装备者
-	if stage == "equip" and equipped_hero == "":
-		ui.tip.text = "先给队友装备这把剑(⑤ 装备页 点「装备此剑」)"
-		return
-	# 已完成全部阶段 -> 消耗材料 -> 写入装备 -> 送往神裁砧
+	# 已完成全部阶段 -> 消耗材料 -> 入库(装备在神裁后的武装间决定)
 	if _is_finished() and not result_weapon.is_empty():
 		var Settlement := preload("res://application/settle_day.gd")
 		var Inventory := preload("res://domain/economy/inventory.gd")
@@ -542,11 +545,11 @@ func _on_next() -> void:
 		_refresh_runinfo()
 		var Session := preload("res://core/flow/game_session.gd")
 		Session.weapon_facts = result_weapon
-		# 装备写入 RunState(武器实例入库 + 队伍 loadout)
-		var EquipWeapon := preload("res://application/equip_weapon.gd")
+		# 武器入库(未装配;神裁后到"武装间"决定持有者)
 		var instance := {"instance_id": "w_%d_%s" % [GameApp.run.current_day, Time.get_ticks_msec()],
-			"facts": result_weapon, "durability": 100.0, "contract_src": ""}
-		EquipWeapon.equip(GameApp.run, instance, equipped_hero)
+			"facts": result_weapon, "durability": 100.0, "contracts": [], "holder_id": ""}
+		GameApp.run.weapons.append(instance)
+		Session.weapon_instance_id = str(instance.instance_id)
 		GameApp.goto("altar")
 		return
 	# 确定当前阶段

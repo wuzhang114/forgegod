@@ -4,12 +4,14 @@
 class_name GameSession
 
 static var weapon_facts: Dictionary = {}       # ForgeCore.build 结果
+static var weapon_instance_id := ""            # 本轮武器实例 id(神裁定稿写回定位)
 static var divine_turn: Dictionary = {}        # ScriptedGod.adjudicate 最近一轮
 static var divine_contract: Dictionary = {}    # 定稿契约(校验通过): {source, readable}
 static var negotiation_history: Array = []     # 对话记录 [{who, text, stance}]
 
 static func reset() -> void:
 	weapon_facts = {}
+	weapon_instance_id = ""
 	divine_turn = {}
 	divine_contract = {}
 	negotiation_history = []

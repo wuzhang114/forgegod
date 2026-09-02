@@ -35,8 +35,10 @@ func _test_new_run() -> void:
 	_check(r.run_seed == 42, "种子记录")
 	_check(r.run_id.begins_with("run_42_"), "run_id 生成")
 	_check(r.current_day == 1 and r.money == 100.0, "默认日/金钱")
-	_check(r.inventory.has("iron_ore") and r.weapons.is_empty() and r.roster.is_empty(),
-		"初始库存/空武器库/空队伍")
+	_check(r.inventory.has("iron_ore") and r.roster.is_empty(), "初始库存/空队伍")
+	_check(r.weapons.size() == 3, "默认三把演示武器")
+	_check(str(r.weapons[0].holder_id) == "hero_1" and (r.weapons[0].get("contracts", []) as Array).size() >= 1,
+		"默认武器已带演示契约与持有者")
 	_check(r.contract_src == "", "契约为空")
 
 

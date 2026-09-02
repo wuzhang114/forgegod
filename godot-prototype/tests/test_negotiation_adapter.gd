@@ -56,6 +56,10 @@ func _test_scripted_adapter() -> void:
 
 
 func _test_ai_stubs() -> void:
+	# 注入纯净配置路径(避免本机真实配置污染断言)
+	const GodConfig := preload("res://adapters/negotiation/god_config.gd")
+	GodConfig.override_path = "user://test_god_cfg.json"
+	DirAccess.remove_absolute(GodConfig.override_path)
 	var local := LocalAI.new()
 	_check(local.probe() == false, "无密钥时本地 AI 未探活")
 	var turn := local.adjudicate(_mk_facts(), "任意申请")
@@ -65,6 +69,8 @@ func _test_ai_stubs() -> void:
 	var rturn := remote.adjudicate(_mk_facts(), "任意申请")
 	_check(Base.validate(rturn) and str(rturn.get("refuse_reason", "")) == "remote_ai_not_configured",
 		"云端桩输出合法")
+	GodConfig.override_path = ""
+	DirAccess.remove_absolute("user://test_god_cfg.json")
 
 
 func _test_provider_factory() -> void:

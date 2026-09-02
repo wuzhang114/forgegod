@@ -160,14 +160,10 @@ func _on_accept() -> void:
 		return
 	var res := Session.commit_contract(str(turn.draft))
 	if res.ok:
-		# 契约定稿写回武器实例(equip 的武器;战斗按装备者挂契约)
+		# 契约定稿写回武器实例(武装间/战斗按实例契约生效)
 		var EquipWeapon := preload("res://application/equip_weapon.gd")
-		var wep := EquipWeapon.weapon_with_contract(GameApp.run)
-		if not wep.is_empty():
-			EquipWeapon.equip(GameApp.run, {
-				"instance_id": str(wep.get("instance_id", "w_x")),
-				"contract_src": str(Session.divine_contract.get("source", ""))},
-				str(wep.get("holder_id", "hero_1")))
+		EquipWeapon.add_contract(GameApp.run, str(Session.weapon_instance_id), "c_player",
+			str(Session.divine_contract.get("source", "")))
 		_say("你", "我接受这份契约。")
 		_say("神", "刻印已成。去让沙场替我作证。")
 		ui.accept.visible = false
@@ -177,9 +173,9 @@ func _on_accept() -> void:
 
 
 func _on_to_battle() -> void:
-	# 契约定稿同步进 RunState(存档基础)
+	# 契约定稿同步给武装间(装备后出战)
 	GameApp.run.contract_src = str(Session.divine_contract.get("source", ""))
-	GameApp.goto("battle")
+	GameApp.goto("armory")
 
 
 ## 神祇模式按钮刷新

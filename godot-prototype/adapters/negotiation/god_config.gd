@@ -11,8 +11,10 @@ const DEFAULTS := {
 	"god_mode": "scripted",        # scripted | local | remote
 	"local_endpoint": "",
 	"local_key": "",
+	"local_model": "",
 	"remote_endpoint": "",
 	"remote_key": "",
+	"remote_model": "",
 }
 
 

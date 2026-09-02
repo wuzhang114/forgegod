@@ -5,6 +5,7 @@ extends RefCounted
 const SCENES := {
 	"forge": "res://scenes/forge/forge_scene.tscn",
 	"altar": "res://scenes/altar/altar_scene.tscn",
+	"armory": "res://scenes/armory/armory_scene.tscn",
 	"battle": "res://scenes/battle/battle_demo.tscn",
 }
 

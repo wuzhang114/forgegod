@@ -39,11 +39,25 @@ static func loadout_of(run, hero_id: String) -> Dictionary:
 	return {}
 
 
-## 库中携带神赐契约的武器实例(定稿那把;用于战斗契约持有人定位)
+## 武器实例加挂契约(神裁定稿;instance_id 定位)
+static func add_contract(run, instance_id: String, cid: String, src: String) -> bool:
+	for w in run.weapons:
+		if str(w.get("instance_id", "")) == instance_id:
+			if not w.has("contracts"):
+				w["contracts"] = []
+			var contracts: Array = w.contracts
+			contracts.append({"cid": cid, "src": src})
+			return true
+	return false
+
+
+## 库中携带神赐契约的武器实例(定稿那把;用于界面高亮)
 static func weapon_with_contract(run) -> Dictionary:
 	for w in run.weapons:
-		if str(w.get("contract_src", "")).strip_edges() != "":
-			return w
+		var cs: Array = w.get("contracts", [])
+		for c in cs:
+			if str(c.get("src", "")).strip_edges() != "":
+				return w
 	return {}
 
 

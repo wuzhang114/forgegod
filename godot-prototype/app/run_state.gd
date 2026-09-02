@@ -36,12 +36,34 @@ func new_run(seed_value: int = 0) -> void:
 	money = START_MONEY
 	inventory = START_INVENTORY.duplicate(true)
 	workshop = {}
-	weapons = []
+	weapons = _default_weapons()
 	roster = []
 	expedition = {}
 	negotiation_history = []
 	world_flags = {}
 	contract_src = ""
+
+
+## 默认演示三把武器(守卫/连击手/射手;契约 = 演示神赐;武装间可换装)
+static func _default_weapons() -> Array:
+	var Registry := preload("res://domain/content/content_registry.gd")
+	var arch := {
+		"demon_bulwark": {"name": "誓约盾锤", "holder": "hero_1",
+			"contracts": [{"cid": "c_bulwark", "tpl": "bulwark"}, {"cid": "c_quake", "tpl": "quake"}]},
+		"demon_life": {"name": "嗜血之刃", "holder": "hero_2",
+			"contracts": [{"cid": "c_life", "tpl": "lifesteal"}]},
+		"demon_scorch": {"name": "灼烧之弓", "holder": "hero_3",
+			"contracts": [{"cid": "c_scorch", "tpl": "scorch"}]},
+	}
+	var out: Array = []
+	for iid in arch.keys():
+		var a: Dictionary = arch[iid]
+		var contracts: Array = []
+		for c in a.contracts:
+			contracts.append({"cid": str(c.cid), "src": str(Registry.contract_template(str(c.tpl)).src)})
+		out.append({"instance_id": iid, "facts": {}, "durability": 100.0,
+			"contracts": contracts, "holder_id": str(a.holder)})
+	return out
 
 
 ## 序列化(存档/网络边缘)
