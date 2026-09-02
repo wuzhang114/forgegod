@@ -37,10 +37,7 @@ device 蓄能盾击 {
 
 const HEX_SIZE := 50.0
 const Y_SQUASH := 0.54
-const BOARD_TILT_DEG := 12.0  # 整个六边形战场轻微偏转(视觉风格)
 const BOARD_CENTER := Vector2(640, 430)  # 兜底;实际每张地图用 ground_y(贴地面带)
-const TILT_C := 0.9781476007   # cos(12°)
-const TILT_S := 0.2079116908   # sin(12°)
 
 ## 每张图只承担环境与平整地面，中心棋盘由 _draw_board() 叠加。
 const BATTLE_BACKGROUNDS := {
@@ -118,14 +115,9 @@ func _ready_contract() -> void:
 
 ## ---------------- 坐标 ----------------
 
-## 战场整体偏转(行向倾斜),格与六边形共用同一变换,保证拼接对齐。
-func _tilt(v: Vector2) -> Vector2:
-	return Vector2(v.x * TILT_C - v.y * TILT_S, v.x * TILT_S + v.y * TILT_C)
-
-
 func px_of(grid: Vector2i) -> Vector2:
 	var p := Grid.to_pixel(grid, HEX_SIZE)
-	return board_origin + _tilt(Vector2(p.x, p.y * Y_SQUASH))
+	return board_origin + Vector2(p.x, p.y * Y_SQUASH)
 
 
 func pick_grid(mouse_px: Vector2) -> Vector2i:
@@ -163,7 +155,7 @@ func _recenter_board() -> void:
 	var center := Vector2((min_px.x + max_px.x) * 0.5, (min_px.y + max_px.y) * 0.5 * Y_SQUASH)
 	# 中心竖坐标跟随该地图的地面带(由背景采样定标),让棋盘与地面贴合
 	var ground_y := float(battle_map.get("ground_y", int(BOARD_CENTER.y)))
-	board_origin = Vector2(BOARD_CENTER.x, ground_y) - _tilt(center)
+	board_origin = Vector2(BOARD_CENTER.x, ground_y) - center
 
 
 func _board_bounds() -> Dictionary:
@@ -433,7 +425,7 @@ func _draw_hd2d_bg() -> void:
 
 
 func _draw_board() -> void:
-	# 只画六边形(无大矩形底框),六边形随战场整体偏转
+	# 只画六边形(无大矩形底框)
 	for q in range(int(battle_map.get("q_min", 0)), int(battle_map.get("q_max", 7)) + 1):
 		for r in range(int(battle_map.get("r_min", 0)), int(battle_map.get("r_max", 4)) + 1):
 			var c := Vector2i(q, r)
@@ -458,8 +450,7 @@ func _hex_pts(p: Vector2) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	for i in 6:
 		var ang := deg_to_rad(60.0 * i - 30.0)
-		# 顶点按战场同一偏转变换,相邻六边形拼接保持对齐
-		out.append(p + _tilt(Vector2(cos(ang), sin(ang) * Y_SQUASH)) * (HEX_SIZE - 2.0))
+		out.append(p + Vector2(cos(ang), sin(ang) * Y_SQUASH) * (HEX_SIZE - 2.0))
 	return out
 
 
