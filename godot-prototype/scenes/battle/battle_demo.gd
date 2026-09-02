@@ -384,7 +384,8 @@ func _set_tick(t: int) -> void:
 
 
 ## 玩家手动释放主动技(震地怒涛): 以当前播放点为输入,注入 right_click 指令并确定性重模拟。
-## 快照/特效/时间轴全部重建;回退 30 tick(1.5s)让玩家看到施放瞬间。
+## 第一遍 = 纯实时战斗: 施放后原地续播(不闪回、不暂停),技能立即生效;
+## 战斗结束后进入回放模式(时间轴可自由拖动回看本局)。
 func _cast_active() -> void:
 	if phase != "playing" or play_tick >= total_ticks:
 		return
@@ -392,7 +393,9 @@ func _cast_active() -> void:
 		return
 	var cast_at := maxi(play_tick, 1)
 	_run_battle(cast_at)
-	_set_tick(maxi(cast_at - 30, 0))
+	_set_tick(cast_at)
+	paused = false
+	_acc = 0.0
 
 
 func _update_units(animate: bool = true) -> void:
@@ -822,7 +825,7 @@ func _process_ui() -> void:
 				float(w.get("durability", 0.0)), float(w.get("max_durability", 100.0))]
 		var st := "进行中…"
 		if play_tick >= total_ticks:
-			st = "战斗结束: " + str(sim.battle_result)
+			st = "战斗结束: " + str(sim.battle_result) + " · 拖动时间轴回放本局"
 		ui.status.text = "tick %d/%d · %s · ×%s" % [play_tick, total_ticks, st, str(speed)]
 		var charge := 0.0
 		if not snapshots.is_empty():
