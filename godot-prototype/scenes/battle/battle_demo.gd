@@ -466,11 +466,12 @@ func _draw_deploy_units() -> void:
 		if drag_index >= 0 and deploy_entities[drag_index].id == e.id:
 			p = get_viewport().get_mouse_position()
 		# 与战斗纸片人同一造型基准: 脚底=格心(y=0),头在肩上方
-		draw_circle(p + Vector2(0, -(UNIT_H - UNIT_HEAD_R) - 4.5), UNIT_HEAD_R, col.darkened(0.15))
-		draw_rect(Rect2(p + Vector2(-UNIT_W / 2.0, -(UNIT_H - UNIT_HEAD_R) + 1.5),
-			Vector2(UNIT_W, UNIT_H - UNIT_HEAD_R - 5.0)), col)
-		draw_rect(Rect2(p + Vector2(-UNIT_W / 2.0, -(UNIT_H - UNIT_HEAD_R) + 1.5),
-			Vector2(UNIT_W, UNIT_H - UNIT_HEAD_R - 5.0)), Color(0, 0, 0, 0.5), false, 1.0)
+		var head_y := -(UNIT_H - UNIT_HEAD_R)               # 头圆心
+		var body_top := -(UNIT_H - UNIT_HEAD_R) + UNIT_HEAD_R - 2.0  # 肩下 2px
+		var body_h := UNIT_H - UNIT_HEAD_R - 5.0
+		draw_circle(p + Vector2(0, head_y), UNIT_HEAD_R, col.darkened(0.15))
+		draw_rect(Rect2(p + Vector2(-UNIT_W / 2.0, body_top), Vector2(UNIT_W, body_h)), col)
+		draw_rect(Rect2(p + Vector2(-UNIT_W / 2.0, body_top), Vector2(UNIT_W, body_h)), Color(0, 0, 0, 0.5), false, 1.0)
 
 
 ## 角色精灵素材(守卫已接入;后续可按角色扩充)
@@ -547,8 +548,8 @@ class UnitNode:
 	func _draw() -> void:
 		if not alive:
 			return
-		# 待机浮动(纸片呼吸)
-		bob = sin(Time.get_ticks_msec() * 0.004) * 1.5
+		# 待机浮动(纸片呼吸,轻微,脚底基本不离地)
+		bob = sin(Time.get_ticks_msec() * 0.004) * 1.0
 		var base_y := bob
 		# 攻击摆动
 		var rot := 0.0
@@ -570,18 +571,20 @@ class UnitNode:
 			# 头(肩上方)
 			var head_y := -(UNIT_H - UNIT_HEAD_R)
 			draw_circle(Vector2(0, head_y), UNIT_HEAD_R, color.darkened(0.15))
-			# 身体: 脚底=格心(y=0)
+			# 身体: 脚底=格心(y=0);攻击时压缩/拉长都保持脚踩原地
 			var h := UNIT_H - UNIT_HEAD_R - 5.0
+			var body_top := -h
 			if phase == "windup":
 				h = h - 8.0
+				body_top = -h
 			elif phase == "active":
 				h = UNIT_H - 8.0
-			var body_top := -(UNIT_H - UNIT_HEAD_R) + 1.5
+				body_top = -h
 			draw_rect(Rect2(Vector2(-UNIT_W / 2.0, body_top), Vector2(UNIT_W, h)), color)
 			draw_rect(Rect2(Vector2(-UNIT_W / 2.0, body_top), Vector2(UNIT_W, h)), Color(0, 0, 0, 0.5), false, 1.0)
 			# 武器(朝向侧,持于肩下)
 			var wx := 10.0 * facing
-			var shoulder_y := -(UNIT_H - UNIT_HEAD_R) + 6.0
+			var shoulder_y := head_y + UNIT_HEAD_R - 1.0
 			draw_line(Vector2(wx, shoulder_y + 6.0), Vector2(wx + 14 * facing, shoulder_y),
 				Color(0.85, 0.8, 0.7), 2.5)
 			if phase == "active":
