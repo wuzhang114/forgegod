@@ -713,6 +713,8 @@ class UnitNode:
 	var bob := 0.0
 	var texture: Texture2D = null
 	var mv_tween: Tween = null
+	var last_hp := -1.0        # 治疗检测: 血量上升则绿闪
+	var heal_flash_until := 0  # msec
 
 	func _init(id: String, c: Color, p: Vector2, tex: Texture2D = null) -> void:
 		eid = id
@@ -724,6 +726,10 @@ class UnitNode:
 	func sync(e: Dictionary, px: Vector2, animate: bool = true) -> void:
 		hp_ratio = clampf(e.hp / maxf(e.max_hp, 1.0), 0.0, 1.0)
 		max_hp = e.max_hp
+		# 治疗反馈: 血量上升 -> 血条绿闪 0.6 秒
+		if last_hp >= 0.0 and e.hp > last_hp + 0.001:
+			heal_flash_until = int(Time.get_ticks_msec()) + 600
+		last_hp = e.hp
 		phase = e.phase
 		tag = e.tag
 		alive = e.alive
@@ -811,11 +817,16 @@ class UnitNode:
 		# 眩晕标记(头顶黄圈,不随体摆动)
 		if stunned:
 			draw_arc(Vector2(0, -UNIT_H - 14.0), 5.5, 0.0, TAU, 16, Color(1.0, 0.9, 0.35, 0.95), 2.0)
-		# 血条(头顶上方,不随体摆动)
+		# 血条(头顶上方,不随体摆动;治疗瞬间绿闪)
 		var bar_y := -UNIT_H - 6.0
 		draw_rect(Rect2(Vector2(-15, bar_y), Vector2(30, 4)), Color(0.1, 0.08, 0.1))
-		var hc := Color(0.9, 0.3, 0.3) if color == ENEMY_COLOR else Color(0.3, 0.9, 0.4)
-		draw_rect(Rect2(Vector2(-15, bar_y), Vector2(30 * hp_ratio, 4)), hc)
+		var flashing := Time.get_ticks_msec() < heal_flash_until
+		var hc := Color(0.3, 1.0, 0.5) if flashing else \
+			(Color(0.9, 0.3, 0.3) if color == ENEMY_COLOR else Color(0.3, 0.9, 0.4))
+		var fill_w := 30 * hp_ratio
+		draw_rect(Rect2(Vector2(-15, bar_y), Vector2(fill_w, 4)), hc)
+		if flashing:
+			draw_rect(Rect2(Vector2(-15, bar_y), Vector2(30, 4)), Color(0.6, 1.0, 0.7, 0.9), false, 1.5)
 
 
 ## ---------------- UI ----------------
