@@ -5,53 +5,49 @@
 
 ## 一句话理解这个项目
 
-玩家经营铁匠铺,用部件与材料打造武器 → 向由 AI 扮演的锻造之神用自然语言申请"神赐机制"(不是从技能列表选!)→ 神明基于**武器的事实档案**(材料/工艺/缺陷)质询、还价、驳回或应允 → 契约编译为可执行的机制图 → 武器交给勇者小队,在**六边形棋盘自走棋战场**上验证 → 战报回炉,驱动下一把武器。
+玩家经营铁匠铺,用部件与材料打造武器 → 向由 AI 扮演的锻造之神用自然语言申请"神赐机制"(不是从技能列表选!)→ 神明基于**武器的事实档案**(材料/工艺/缺陷)质询、还价、驳回或应允 → 契约编译为可执行的机制图 → 武装间调配装备 → 在**六边形棋盘自走棋战场**上验证 → 战报回炉(奖赏/伤势/日推进),驱动下一把武器。
 
 ## 仓库结构
 
 | 路径 | 内容 |
 |---|---|
 | `游戏设计文档(根目录)` | 愿景/核心玩法/剧情/机制生成/本地 AI 部署等早期企划(历史设计,当前以代码为准) |
-| `data/mechanism-library.json` | 47 条"神赐机制蓝图库"(AI 学习种子/判例素材) |
 | `scripts/` | 文档生成工具 + Godot 开发脚本(devkit.ps1) |
-| `docs/` | 专题调研报告(自走棋源码研究 / Godot 开发工具包) |
+| `docs/` | 专题文档(自走棋源码研究 / Godot 开发工具包) |
 | **`godot-prototype/`** | **独立游戏原型(Godot 4.x / GDScript,唯一主要开发线)** |
 | `godot-prototype/app/` | 应用根:GameApp(autoload)/ RunState(唯一事实来源)/ AppRouter / SaveRepository |
-| `godot-prototype/domain/` | 领域层:战斗(battle)/ 武器(weapon)/ 内容(content)/ 经济(economy)/ 谈判(negotiation) |
-| `godot-prototype/application/` | 应用层用例:SettleDay(日结算)/ NegotiationProvider(神祇适配器工厂) |
-| `godot-prototype/adapters/` | 适配器:ScriptedGod / LocalAI / RemoteAI(神前交涉 Adapter seam) |
+| `godot-prototype/domain/` | 领域层:战斗 / 武器 / 内容注册表 / 经济 / 谈判协议 |
+| `godot-prototype/application/` | 应用层用例:日结算 / 装备用例 / 神祇适配器工厂 |
+| `godot-prototype/adapters/` | 适配器:脚本神 / 本地 AI / **云端 AI(真实裁决)** / 连接探针 / 上下文预加载 |
+| `godot-prototype/data/` | 判例库(mechanism-library.json,47 条神赐蓝图) |
 | `session-log.md` | 开发日志(设计决策/踩坑记录) |
 
-> 架构层级:场景 UI → Application 用例 → Domain 规则 → 数据资源(ContentRegistry);数值唯一源 balance.gd,内容唯一源 ContentRegistry,状态唯一源 RunState。
-
-> 历史说明:早期 Minecraft Mod 原型(forgegod-mod)已归档并从仓库移除——其验证过的技术原则已全部迁移至 Godot 独立原型,需要时可从 git 历史恢复。
+> 层级:场景 UI → Application 用例 → Domain 规则 → 数据资源(ContentRegistry);
+> 数值唯一源 `balance.gd`;内容唯一源 `ContentRegistry`;状态唯一源 `RunState`。
+> **玩家存档(user://)从不入库**;仓库禁止任何 `run/`、`saves/`、`build/` 目录与 `.dat` 文件(gitignore 强制)。
+> 历史说明:早期 Minecraft Mod 原型(含其 MC 世界存档)已彻底移除——需要时仅可凭 git 历史追溯,不再入库。
 
 ## godot-prototype 快速开始
 
 ```powershell
-# 运行全部测试(155 项断言)
+# 运行全部测试(163 项断言)
 godot --headless --path godot-prototype -s res://tests/run_headless.gd
 
-# 完整玩家闭环:锻造台 → 神裁砧交涉 → 棋盘战斗
+# 完整玩家闭环:锻造台 → 神裁砧交涉 → 武装间 → 棋盘战斗 → 日结算回炉
 godot --path godot-prototype scenes/forge/forge_scene.tscn
 
-# 单独的战斗演示(六边形棋盘 · 纸片人 · HD-2D 战场 · 布阵/主动技/回放)
-godot --path godot-prototype scenes/battle/battle_demo.tscn
+# 开发工具(等价 MCP 的命令行工作流)
+.\scripts\devkit.ps1 test|run|smoke|diag|quit
 ```
 
 ## 原型技术亮点(均已实测)
 
-- **MechLang 受限机制语言**:AI/假神输出的是可静态校验的机制代码(解析→白名单→预算→确定性 VM),不是任意代码——已验证:模型对 30 条中文申请生成 MechLang,**通过率 30/30(100%)**;错误可被"结构化回环"自动修复。
-- **神前交涉验证**:纯净模型扮演锻造之神,对 4 把武器 × 20 条申请(应有/应议价/应驳回)裁决,**20/20 通过四道防线**(事实引用防幻觉/草案可编译/裁决一致/立场完整)。
-- **六边形棋盘自走棋战斗**:
-  - 确定性离线模拟(20Hz,种子+输入决定一切)+ 逐 tick 快照重放;回放 = 拖轴定位 + 松手续播
-  - 六区伤害乘区(独立乘区单桶加算,防膨胀铁律);25 态异常属性表(DoT 跳伤/叠层 ×3 封顶)
-  - 金铲铲式索敌(目标粘性/受击转火/嘲讽/控制打断/缴械/缄默/攻速)
-  - 主动技体系:玩家手动释放(确定性输入注入 + 重模拟),三技能演示(守卫·震地眩晕 / 射手·灼烧之种 / 连击手·嗜血之舞)
-  - 棋盘格效果层(地形修饰/进出格事件)+ 几何助手(连线/锥形/击退落点)
-  - 远程弹道延迟命中;契约 traits(guaranteed_hit 等)真实生效
-- **锻造产物全链路进战斗**:四维(纯度/结构/热处理/平衡)→ 武器面板(攻击/暴击/破甲/独立乘区/耐久),缺陷有真实负面效果;数值 100% 集中在 `core/config/balance.gd`
-- **数值单一职责**:调平衡只改一处,155 项测试守护。
+- **MechLang 受限机制语言**:AI/假神输出可静态校验的机制代码(解析→白名单→预算→确定性 VM);模型生成 30/30(100%)通过,错误可结构化回环修复。
+- **AI 锻造之神(云端真实裁决)**:DeepSeek 官方端点,按 PROMPT_god 协议输出 `DivineTurn`(质询/还价/应允/驳回 + 事实引用 + MechLang 草案 + **AI 生成的技能描述 summary**);开始界面保存 API 即检测连接(探针:端点自动补全/密钥误填拦截/错误原文透传)并预加载上下文(协议+武器档案+判例库);交涉异步不卡 UI;草案校验失败自动回环纠正,仍失败则展示描述降级(不死局)。
+- **神前交涉验证**(脚本神):4 武器 × 20 申请,20/20 通过四道防线。
+- **六边形棋盘自走棋战斗**:确定性离线模拟(20Hz,种子+输入决定一切)+ 逐 tick 快照重放;六区伤害乘区;25 态(DoT 跳伤/叠层×3);金铲铲式索敌(目标粘性/受击转火/嘲讽/控制/缴械/缄默/攻速);棋盘格效果层;远程弹道延迟命中;契约 traits 真实生效;主动技动态按钮(设备名);重击触发契约提示需守卫装备。
+- **武器库/武装间**:神裁后多武器界面——装备/换装/卸下(一把武器一人持有),默认三把演示武器(誓约盾锤/嗜血之刃/灼烧之弓)自带契约;四维→战斗面板 100% 同源(ForgeCalculator)。
+- **经营垂直切片**:锻造耗材、战斗结算(赏金/声望/日+1/伤势/休整、幂等)、RunState 全程持久(存档/读档)。
 
 ## 设计文档索引(概念 → 系统)
 
@@ -63,16 +59,16 @@ godot --path godot-prototype scenes/battle/battle_demo.tscn
 | `godot-prototype/02-battle-system-design.md` | 战斗设计:六区乘区/25 态/判定链/节点路线图/播放器 |
 | `godot-prototype/05-forge-design.md` | 锻造系统(Tetra 式面板决策版) |
 | `godot-prototype/00-m1-plan.md` | M1 假神闭环与 MechLang 语言定义(v0.1→v0.5) |
+| `godot-prototype/tests/negotiation/PROMPT_god.md` | AI 神协商协议(裁决姿态/事实引用/输出格式) |
 | `docs/autochess-research.md` | 自走棋开源项目源码调研(6 项目 → 可落地建议) |
+| `docs/godot-devkit.md` | Godot 官方文档入口/Skills/MCP 选型/devkit 工作流 |
 | `session-log.md` | 开发日志:设计决策、踩坑记录、每日交付 |
 
 ## 状态
 
-- 核心循环(锻造→交涉→契约→战斗→回炉)已可完整游玩(脚本假神版;AI 神接入通过适配器协议就位)。
-- **应用架构重构完成(5 步)**:RunState/GameApp/存档/路由 → BattleScenario/EventLog/Report(timeout/draw) → ForgeCalculator 唯一计算 + ContentRegistry → 经营域(库存/队伍/日结算垂直切片) → 神祇适配器(脚本神/本地AI/云端AI)。
-- 战斗演示含 3 个主动技、DoT/灼烧、回放回看,血量 ×3 长线战斗观感。
-- 测试:godot-prototype **160/160** 断言全绿。
-- 待做:多轮交涉与判例库、出征路线图 UI、正式美术与 AI 神接入(完成协议实现)。
+- 核心循环(锻造→神裁(AI/脚本可切)→武装→战斗→结算回炉)已可完整游玩;**云端 AI 神真实裁决已贯通**(探针/预加载/异步交涉/自纠错)。
+- 测试:godot-prototype **163/163** 断言全绿;四场景冒烟无脚本错误。
+- 待做:多轮交涉与判例库沉淀、出征路线图 UI、Local AI 适配器实装、正式美术。
 
 ---
 

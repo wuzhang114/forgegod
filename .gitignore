@@ -13,11 +13,15 @@ godot-prototype/.mono/
 Thumbs.db
 _research/
 
+# --- 运行产物/存档(任何路径下都禁止入库) ---
+**/run/
+**/saves/
+**/build/
+*.dat
+
 # --- 敏感信息(任何形式的密钥文件) ---
 *.key
 *.pem
 .env
 credentials*
 apikey*.*
-
-!minecraft-mod-prototype/forgegod-mod/gradle/wrapper/gradle-wrapper.jar
