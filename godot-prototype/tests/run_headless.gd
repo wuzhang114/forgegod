@@ -25,6 +25,7 @@ const RunStateTests := preload("res://tests/test_run_state.gd")
 const BattleScenarioTests := preload("res://tests/test_battle_scenario.gd")
 const ContentRegistryTests := preload("res://tests/test_content_registry.gd")
 const SettlementTests := preload("res://tests/test_settlement.gd")
+const NegotiationTests := preload("res://tests/test_negotiation_adapter.gd")
 const ForgeTests := preload("res://tests/test_forge.gd")
 const GodTests := preload("res://tests/test_scripted_god.gd")
 const BalanceTests := preload("res://tests/test_balance.gd")
@@ -797,6 +798,7 @@ func _initialize() -> void:
 	_test_battle_scenario()
 	_test_content_registry()
 	_test_settlement()
+	_test_negotiation()
 	_test_forge_core()
 	_test_scripted_god()
 	_test_balance()
@@ -1780,6 +1782,13 @@ func _test_settlement() -> void:
 	var r: Dictionary = t.run()
 	print("-- 经营结算: 通过 %d / 失败 %d --" % [r.pass, r.fail])
 	_check(r.ok, "经营结算测试全绿")
+
+
+func _test_negotiation() -> void:
+	var t := NegotiationTests.new()
+	var r: Dictionary = t.run()
+	print("-- 谈判适配器: 通过 %d / 失败 %d --" % [r.pass, r.fail])
+	_check(r.ok, "谈判适配器测试全绿")
 
 
 func _test_forge_core() -> void:

@@ -13,10 +13,16 @@
 |---|---|
 | `游戏设计文档(根目录)` | 愿景/核心玩法/剧情/机制生成/本地 AI 部署等早期企划(历史设计,当前以代码为准) |
 | `data/mechanism-library.json` | 47 条"神赐机制蓝图库"(AI 学习种子/判例素材) |
-| `scripts/` | 文档生成工具 |
-| `docs/` | 专题调研报告(自走棋开源项目源码研究等) |
+| `scripts/` | 文档生成工具 + Godot 开发脚本(devkit.ps1) |
+| `docs/` | 专题调研报告(自走棋源码研究 / Godot 开发工具包) |
 | **`godot-prototype/`** | **独立游戏原型(Godot 4.x / GDScript,唯一主要开发线)** |
+| `godot-prototype/app/` | 应用根:GameApp(autoload)/ RunState(唯一事实来源)/ AppRouter / SaveRepository |
+| `godot-prototype/domain/` | 领域层:战斗(battle)/ 武器(weapon)/ 内容(content)/ 经济(economy)/ 谈判(negotiation) |
+| `godot-prototype/application/` | 应用层用例:SettleDay(日结算)/ NegotiationProvider(神祇适配器工厂) |
+| `godot-prototype/adapters/` | 适配器:ScriptedGod / LocalAI / RemoteAI(神前交涉 Adapter seam) |
 | `session-log.md` | 开发日志(设计决策/踩坑记录) |
+
+> 架构层级:场景 UI → Application 用例 → Domain 规则 → 数据资源(ContentRegistry);数值唯一源 balance.gd,内容唯一源 ContentRegistry,状态唯一源 RunState。
 
 > 历史说明:早期 Minecraft Mod 原型(forgegod-mod)已归档并从仓库移除——其验证过的技术原则已全部迁移至 Godot 独立原型,需要时可从 git 历史恢复。
 
@@ -62,10 +68,11 @@ godot --path godot-prototype scenes/battle/battle_demo.tscn
 
 ## 状态
 
-- 核心循环(锻造→交涉→契约→战斗→回炉)已可完整游玩(脚本假神版;AI 神接入已通过协议验证)。
+- 核心循环(锻造→交涉→契约→战斗→回炉)已可完整游玩(脚本假神版;AI 神接入通过适配器协议就位)。
+- **应用架构重构完成(5 步)**:RunState/GameApp/存档/路由 → BattleScenario/EventLog/Report(timeout/draw) → ForgeCalculator 唯一计算 + ContentRegistry → 经营域(库存/队伍/日结算垂直切片) → 神祇适配器(脚本神/本地AI/云端AI)。
 - 战斗演示含 3 个主动技、DoT/灼烧、回放回看,血量 ×3 长线战斗观感。
-- 测试:godot-prototype **155/155** 断言全绿。
-- 待做:多轮交涉与判例库、节点路线图出征、经营层(订单/日结)、正式美术与 AI 神接入。
+- 测试:godot-prototype **160/160** 断言全绿。
+- 待做:多轮交涉与判例库、出征路线图 UI、正式美术与 AI 神接入(完成协议实现)。
 
 ---
 

@@ -84,6 +84,16 @@ func _build_ui() -> void:
 	ui.retry.custom_minimum_size = Vector2(180, 36)
 	ui.retry.pressed.connect(func(): ui.accept.visible = false; ui.stance.text = "")
 	add_child(ui.retry)
+	# 神祇适配器切换(脚本神/本地AI桩/云端AI桩;默认脚本神,行为不变)
+	var Provider := preload("res://application/negotiation_provider.gd")
+	ui.mode_btn = Button.new()
+	ui.mode_btn.position = Vector2(80, 545)
+	ui.mode_btn.custom_minimum_size = Vector2(200, 32)
+	ui.mode_btn.pressed.connect(func():
+		Provider.cycle_mode(GameApp.run)
+		_refresh_mode_btn())
+	add_child(ui.mode_btn)
+	_refresh_mode_btn()
 	ui.battle = Button.new()
 	ui.battle.text = "把武器送上棋盘,开始验证战斗"
 	ui.battle.position = Vector2(540, 600)
@@ -123,7 +133,9 @@ func _on_submit() -> void:
 	if app.is_empty():
 		_say("你", "(尚未开口)")
 		return
-	var turn := God.adjudicate(Session.weapon_facts, app)
+	var Provider := preload("res://application/negotiation_provider.gd")
+	var god := Provider.create(Provider.mode_of(GameApp.run))
+	var turn: Dictionary = god.adjudicate(Session.weapon_facts, app)
 	Session.divine_turn = turn
 	_say("你", app)
 	_say("神", turn.speech)
@@ -157,3 +169,10 @@ func _on_to_battle() -> void:
 	# 契约定稿同步进 RunState(存档基础)
 	GameApp.run.contract_src = str(Session.divine_contract.get("source", ""))
 	GameApp.goto("battle")
+
+
+## 神祇模式按钮刷新
+func _refresh_mode_btn() -> void:
+	var Provider := preload("res://application/negotiation_provider.gd")
+	var p := Provider.create(Provider.mode_of(GameApp.run))
+	ui.mode_btn.text = "神祇: %s(点按切换)" % p.display_name()

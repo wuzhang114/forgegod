@@ -583,3 +583,13 @@ M1 上游:WeaponFacts 自动生成(从部件/材料/工序产出事实卡片)→
   - 本地 _research/(6 个自走棋调研 clone,仅本地)
 - .gitignore 移除 Minecraft 段(保留 _research/ 排除)。
 - README 重写:当前状态(3 主动技/DoT/灼烧/武器面板/155 测试)、目录结构、文档索引加 docs/autochess-research.md。
+
+## 2026-09-02(收尾3): 应用架构 5 步重构全部落地
+
+- 第1步 app/: GameApp(autoload)+RunState(唯一事实来源)+AppRouter+SaveRepository;新游戏/继续/存档;场景跳转收拢。
+- 第2步 domain/battle/: BattleScenario(地图/敌群/种子/rules版本,可序列化)+EventLog(事件v版本)+Report(player_win/enemy_win/draw/timeout/retreat+奖励);地图/敌群模板自 battle_demo 迁出;sim 补 timeout 判定;战斗种子由 run_seed+map+day 派生。
+- 第3步 domain/content+weapon: ContentRegistry(材料/模板/战场/敌群/4契约模板);ForgeCalculator(唯一计算:材料预览+战斗换算,预览==战斗同通道);forge_scene 删除重复公式与硬编码。
+- 第4步 domain/economy+application: InventoryOps(消耗/发放)/RosterOps(伤势/休整)/SettleDay(日结算:赏金/声望/日+1/幂等);锻造耗材门控;战斗返回自动结算;forge 顶栏运行信息(第X天/金币/声望/库存)。
+- 第5步 domain/negotiation+adapters: DivineAdjudicator 协议(normalize/validate);ScriptedGodAdapter/LocalAI桩/RemoteAI桩;NegotiationProvider(scripted/local/remote 循环切换,默认 scripted 行为不变);altar 神祇切换按钮。
+- 测试 155 → 160 全绿;README 结构/状态更新;每步独立提交+推送。
+- 新坑: 静态方法引用自身类名在 -s 下不可行(class_name 也不行)→ 实例方法;wrap 撞 Godot 内置函数;Array 索引需显式类型;rest/sync 顺序(先休整旧伤再记新伤)。
