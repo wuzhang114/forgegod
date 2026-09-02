@@ -184,11 +184,24 @@ func _on_turn_ready(Provider, mode: String, app: String) -> void:
 	if turn.stance == "REFUSE":
 		ui.stance.text = "[color=#ff8080]驳回: %s[/color]" % turn.refuse_reason
 	if turn.stance in ["PROPOSE", "COUNTEROFFER"]:
-		# 契约效果说明(本地化文字;源码不再直接展示给玩家)
+		# 技能描述: AI 生成的 summary 优先;无则本地转译(契约源码不再直接展示)
+		var desc := ""
+		var summary := str(turn.get("summary", "")).strip_edges()
+		if summary != "":
+			desc = "【神谕·技能描述】\n" + summary
 		var Explainer := preload("res://domain/weapon/contract_explainer.gd")
-		var desc: Array = Explainer.explain(str(turn.draft))
-		ui.stance.text = "[color=#8f8][b]神已应允,契约效果如下[/b][/color]\n" + "\n".join(desc)
-		ui.accept.visible = true
+		var lines: Array = Explainer.explain(str(turn.draft))
+		if summary != "":
+			desc += "\n\n[color=#999]【契约转译】\n" + "\n".join(lines) + "[/color]"
+		else:
+			desc = "[color=#8f8][b]神已应允,契约效果如下[/b][/color]\n" + "\n".join(lines)
+		if turn.has("draft_valid") and not bool(turn.draft_valid):
+			desc += "\n\n[color=#f80]⚠ 神谕的契约文本未通过校验(神学习笔误),效果以上述描述为准;"
+			desc += "可「换一种说法上奏」让神重新书写。[/color]"
+			ui.accept.visible = false
+		else:
+			ui.accept.visible = true
+		ui.stance.text = desc
 	else:
 		ui.accept.visible = false
 

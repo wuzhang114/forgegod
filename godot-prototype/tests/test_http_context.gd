@@ -19,6 +19,7 @@ func run() -> Dictionary:
 	_test_context_builder()
 	_test_prepare_cache()
 	_test_parse_turn_from_llm()
+	_test_draft_errors()
 	return {"ok": _fails == 0, "pass": _passes, "fail": _fails}
 
 
@@ -84,14 +85,23 @@ func _test_prepare_cache() -> void:
 
 func _test_parse_turn_from_llm() -> void:
 	# 纯 JSON
-	var t1 := RemoteAI.parse_turn_from_llm('{"stance":"PROPOSE","speech":"应允","cited_fact_ids":[],"missing":"","refuse_reason":"","draft":"device 试 { on hit { damage_weapon(1) } }"}')
+	var t1 := RemoteAI.parse_turn_from_llm('{"stance":"PROPOSE","speech":"应允","cited_fact_ids":[],"missing":"","refuse_reason":"","draft":"device 试 { on hit { damage_weapon(1) } }","summary":"命中时损耗1点耐久"}')
 	_check(str(t1.get("stance", "")) == "PROPOSE" and str(t1.get("draft", "")).begins_with("device"),
 		"纯 JSON 解析")
+	_check(str(t1.get("summary", "")) == "命中时损耗1点耐久", "summary 字段保留")
 	# 代码块包裹
-	var t2 := RemoteAI.parse_turn_from_llm('前言... ```json\n{"stance":"QUESTION","speech":"问什么","cited_fact_ids":["x"],"missing":"材料","refuse_reason":"","draft":""}\n``` 后记')
+	var t2 := RemoteAI.parse_turn_from_llm('前言... ```json\n{"stance":"QUESTION","speech":"问什么","cited_fact_ids":["x"],"missing":"材料","refuse_reason":"","draft":"","summary":""}\n``` 后记')
 	_check(str(t2.get("stance", "")) == "QUESTION" and str(t2.get("missing", "")) == "材料",
 		"```json 块提取")
 	# 垃圾输出 -> 容错 REFUSE
 	var t3 := RemoteAI.parse_turn_from_llm("这不是 JSON,只是一段神秘的低语")
 	_check(str(t3.get("stance", "")) == "REFUSE" and str(t3.get("refuse_reason", "")) == "remote_parse_failed",
 		"垃圾输出容错")
+
+
+func _test_draft_errors() -> void:
+	_check(RemoteAI.draft_errors("device 好 { on hit { damage(target, \"fire\", 1) } }").is_empty(),
+		"合法草案无错误")
+	_check(not RemoteAI.draft_errors("device 坏 { on hit { explode_world() } }").is_empty(),
+		"未知函数报错")
+	_check(not RemoteAI.draft_errors("这不是契约").is_empty(), "非契约文本报错")

@@ -21,9 +21,12 @@ func probe() -> bool:
 	return str(cfg.get("remote_key", "")).strip_edges() != ""
 
 
-## 保存/连接确认时调用: 构建并缓存神裁上下文
+## 保存/连接确认时调用: 构建并缓存神裁上下文(含 summary 输出要求)
 func prepare_context(facts: Dictionary) -> Array:
 	cached_context = ContextBuilder.build_messages(facts)
+	cached_context[0]["content"] = str(cached_context[0].get("content", "")) + (
+		"\n\n额外要求(必须遵守): 除了协议字段,请额外输出 \"summary\" 字段 —— 用中文完整描述该契约技的效果,"
+		+ "面向玩家,不含代码;PROPOSE/COUNTEROFFER 时必填(1-3 句),其他姿态可为空字符串。")
 	return cached_context
 
 
@@ -46,17 +49,56 @@ func adjudicate(facts: Dictionary, app: String) -> Dictionary:
 			"cited_fact_ids": [], "missing": [], "refuse_reason": "remote_ai_not_configured", "draft": ""})
 	var msgs := cached_context.duplicate(true)
 	msgs.append({"role": "user", "content": app})
+	var turn := _ask_turn(endpoint, key, model, msgs)
+	# 草案校验: PROPOSE/COUNTEROFFER 时若 MechLang 未过校验 -> 自纠错回环(把错误反馈给神)
+	if str(turn.get("stance", "")) in ["PROPOSE", "COUNTEROFFER"] and str(turn.get("draft", "")).strip_edges() != "":
+		var errs := draft_errors(str(turn.draft))
+		if not errs.is_empty():
+			var fix_msgs := msgs.duplicate(true)
+			fix_msgs.append({"role": "assistant", "content": JSON.stringify(turn)})
+			fix_msgs.append({"role": "user", "content":
+				"你给出的契约草案未通过校验,错误: %s。"
+				+ "请修正草案后重新输出完整 JSON(保持字段与姿势不变,只改 draft)。" % "；".join(errs)})
+			var turn2 := _ask_turn(endpoint, key, model, fix_msgs)
+			if str(turn2.get("refuse_reason", "")) != "remote_parse_failed":
+				turn = turn2
+				if draft_errors(str(turn.draft)).is_empty():
+					turn["draft_valid"] = true
+				else:
+					turn["draft_valid"] = false
+			else:
+				turn["draft_valid"] = false
+		else:
+			turn["draft_valid"] = true
+	var out := Base.normalize(turn)
+	if turn.has("draft_valid"):
+		out["draft_valid"] = turn.draft_valid
+	return out
+
+
+## 请求一次并解析(带推理引擎降级)
+static func _ask_turn(endpoint: String, key: String, model: String, msgs: Array) -> Dictionary:
 	var content := _chat_once(endpoint, key, model, msgs)
-	# 推理引擎(deepseek-v4-flash)在 json_object 下经常只在 reasoning_content 出草稿、
-	# content 为空或非 JSON —— 自动降级到对话引擎 deepseek-chat 重试一次
 	var turn := parse_turn_from_llm(content)
 	if str(turn.get("refuse_reason", "")) == "remote_parse_failed":
-		var fallback: String = "deepseek-chat"
-		var content2 := _chat_once(endpoint, key, fallback, msgs)
+		var content2 := _chat_once(endpoint, key, "deepseek-chat", msgs)
 		var turn2 := parse_turn_from_llm(content2)
 		if str(turn2.get("refuse_reason", "")) != "remote_parse_failed":
 			turn = turn2
-	return Base.normalize(turn)
+	return turn
+
+
+## MechLang 草案静态校验(错误列表;空 = 通过)
+static func draft_errors(src: String) -> Array:
+	var Parser := preload("res://core/mechlang/parser.gd")
+	var Checker := preload("res://core/mechlang/checker.gd")
+	var parsed := Parser.new().parse(src)
+	if not parsed.ok:
+		return parsed.errors
+	var checked := Checker.new().check(parsed.ast)
+	if not checked.ok:
+		return checked.errors
+	return []
 
 
 ## 单次对话请求(推理引擎 content 空时兜底 reasoning_content)
