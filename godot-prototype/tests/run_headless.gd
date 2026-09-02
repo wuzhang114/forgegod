@@ -22,6 +22,7 @@ const ActiveCastTests := preload("res://tests/test_active_cast.gd")
 const DotScorchTests := preload("res://tests/test_dot_scorch.gd")
 const LifeStealTests := preload("res://tests/test_lifesteal.gd")
 const RunStateTests := preload("res://tests/test_run_state.gd")
+const BattleScenarioTests := preload("res://tests/test_battle_scenario.gd")
 const ForgeTests := preload("res://tests/test_forge.gd")
 const GodTests := preload("res://tests/test_scripted_god.gd")
 const BalanceTests := preload("res://tests/test_balance.gd")
@@ -791,6 +792,7 @@ func _initialize() -> void:
 	_test_dot()
 	_test_lifesteal()
 	_test_run_state()
+	_test_battle_scenario()
 	_test_forge_core()
 	_test_scripted_god()
 	_test_balance()
@@ -1753,6 +1755,13 @@ func _test_run_state() -> void:
 	var r: Dictionary = t.run()
 	print("-- RunState/存档/路由: 通过 %d / 失败 %d --" % [r.pass, r.fail])
 	_check(r.ok, "RunState 测试全绿")
+
+
+func _test_battle_scenario() -> void:
+	var t := BattleScenarioTests.new()
+	var r: Dictionary = t.run()
+	print("-- 战斗场景/事件/战报: 通过 %d / 失败 %d --" % [r.pass, r.fail])
+	_check(r.ok, "战斗场景测试全绿")
 
 
 func _test_forge_core() -> void:

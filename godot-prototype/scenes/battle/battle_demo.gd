@@ -12,6 +12,10 @@ const Parser := preload("res://core/mechlang/parser.gd")
 const Checker := preload("res://core/mechlang/checker.gd")
 const Grid := preload("res://core/runtime/hex_grid.gd")
 const WeaponStats := preload("res://core/forge/weapon_stats.gd")
+const MapTemplates := preload("res://domain/battle/map_templates.gd")
+const EnemyPacks := preload("res://domain/battle/enemy_packs.gd")
+const BattleScenario := preload("res://domain/battle/battle_scenario.gd")
+const BattleReport := preload("res://domain/battle/battle_report.gd")
 
 const SRC_BULWARK := """
 device 蓄能盾击 {
@@ -106,22 +110,7 @@ const BATTLE_BACKGROUNDS := {
 	"autumn_shrine": preload("res://assets/battle/autumn-shrine.png"),
 }
 
-## q 是左右列，r 是上下行。每个模板都保留至少 2x3 的双方部署空间，
-## gap_q 是中央空列：棋盘会画出该列，但布阵不会把单位放入其中。
-const BATTLE_MAPS := [
-	{"id": "forge_courtyard", "label": "熔炉庭院", "q_min": 0, "q_max": 8,
-		"r_min": 0, "r_max": 4, "player_q_min": 0, "player_q_max": 2,
-		"enemy_q_min": 6, "enemy_q_max": 8, "gap_q": 4, "ground_y": 420},
-	{"id": "ruined_road", "label": "断垣关道", "q_min": 0, "q_max": 7,
-		"r_min": 0, "r_max": 4, "player_q_min": 0, "player_q_max": 1,
-		"enemy_q_min": 6, "enemy_q_max": 7, "gap_q": 4, "ground_y": 468},
-	{"id": "crystal_mine", "label": "蓝晶矿窟", "q_min": 0, "q_max": 6,
-		"r_min": 0, "r_max": 3, "player_q_min": 0, "player_q_max": 1,
-		"enemy_q_min": 5, "enemy_q_max": 6, "gap_q": 3, "ground_y": 395},
-	{"id": "autumn_shrine", "label": "秋枫神台", "q_min": 0, "q_max": 8,
-		"r_min": 0, "r_max": 3, "player_q_min": 0, "player_q_max": 2,
-		"enemy_q_min": 6, "enemy_q_max": 8, "gap_q": 4, "ground_y": 434},
-]
+## 战场地图/敌群模板内容源: domain/battle/map_templates.gd + enemy_packs.gd(第 3 步并入 ContentRegistry)
 
 const HERO_COLORS := {"guard": Color(0.35, 0.65, 1.0), "duelist": Color(1.0, 0.55, 0.2),
 	"ranger": Color(0.35, 0.9, 0.5)}
@@ -142,6 +131,9 @@ var battle_map: Dictionary = {}
 var map_rng := RandomNumberGenerator.new()
 var background_texture: Texture2D
 var board_origin := BOARD_CENTER
+var current_pack_id := "golems"      # 当前敌群包(内容注册表)
+var sim_seed := 7                    # 本场战斗种子(由 run seed + 地图 + 天数派生)
+var last_report: Dictionary = {}     # 战报(第 4 步结算消费)
 ## 玩家主动技输入累积(确定性): [{cid, at}] —— 每次重模拟整体注入,先放的技能不丢失
 var skill_log: Array = []
 
@@ -199,12 +191,17 @@ func pick_grid(mouse_px: Vector2) -> Vector2i:
 func _select_battle_map(index: int = -1) -> void:
 	var map_index := index
 	if map_index < 0:
-		map_index = map_rng.randi_range(0, BATTLE_MAPS.size() - 1)
-	battle_map = BATTLE_MAPS[clampi(map_index, 0, BATTLE_MAPS.size() - 1)].duplicate(true)
+		map_index = map_rng.randi_range(0, MapTemplates.all_ids().size() - 1)
+	var ids := MapTemplates.all_ids()
+	battle_map = MapTemplates.get_map(str(ids[clampi(map_index, 0, ids.size() - 1)]))
+	# 敌群包随机(内容注册表;确定性由 run seed + 地图决定)
+	current_pack_id = EnemyPacks.random_pack(map_rng)
+	# 战斗种子: 由 run 种子/地图/天数派生(存档复现依据)
+	sim_seed = BattleScenario.derive_battle_seed(_run_seed_of(), str(battle_map.id), 1)
 	background_texture = BATTLE_BACKGROUNDS.get(str(battle_map.id))
 	_recenter_board()
 	if ui.has("map"):
-		ui.map.text = "战场 · " + str(battle_map.label)
+		ui.map.text = "战场 · " + str(battle_map.label) + " · " + str(EnemyPacks.get_pack(current_pack_id).get("label", ""))
 
 
 func _recenter_board() -> void:
@@ -245,24 +242,22 @@ func _setup_deploy() -> void:
 	if battle_map.is_empty():
 		_select_battle_map(0)
 	var pq := int(battle_map.player_q_min)
-	var eq := int(battle_map.enemy_q_min)
 	var r_min := int(battle_map.r_min)
 	var r_max := int(battle_map.r_max)
 	var r_mid := floori(float(r_min + r_max) / 2.0)
-	deploy_entities = [
-		# 默认 2 前排 + 1 后排，全部落在左侧 2x3 部署区内。
-		{"id": "hero_1", "role": "guard", "name": "守卫·布兰特", "grid": Vector2i(pq + 1, r_mid)},
-		{"id": "hero_2", "role": "duelist", "name": "连击手·莉娅", "grid": Vector2i(pq, r_mid)},
-		{"id": "hero_3", "role": "ranger", "name": "射手·锡拉", "grid": Vector2i(pq, r_min)},
+	# 我方阵容来自 BattleScenario(后续由 Roster 域模块提供)
+	var proto := BattleScenario.new()
+	var roster := [
+		{"id": "hero_1", "role": "guard", "name": "守卫·布兰特"},
+		{"id": "hero_2", "role": "duelist", "name": "连击手·莉娅"},
+		{"id": "hero_3", "role": "ranger", "name": "射手·锡拉"},
 	]
-	var enemy_cells := [
-		Vector2i(eq, r_min), Vector2i(eq + 1, r_min),
-		Vector2i(eq, r_mid), Vector2i(eq + 1, r_mid),
-		Vector2i(eq + 1, r_max),
-	]
-	for i in enemy_cells.size():
-		deploy_entities.append({"id": "enemy_%d" % (i + 1), "role": "brute",
-			"name": "石甲傀儡 %d" % (i + 1), "grid": enemy_cells[i]})
+	proto.init_build(str(battle_map.id), current_pack_id, sim_seed, roster, [])
+	deploy_entities = []
+	for e in proto.player_deploy:
+		deploy_entities.append(e.duplicate(true))
+	for e in proto.enemy_deploy:
+		deploy_entities.append(e.duplicate(true))
 	phase = "deploy"
 
 
@@ -303,9 +298,14 @@ func _begin_battle() -> void:
 	_run_battle(skill_log)
 
 
+## 当前 run 种子(来自 GameApp autoload;存档复现依据)
+func _run_seed_of() -> int:
+	return GameApp.run.run_seed
+
+
 ## 构造并运行一场战斗;skill_entries = [{cid, at}] 玩家主动技输入(确定性重模拟)
 func _run_battle(skill_entries: Array) -> void:
-	sim = BattleSim.new(7)
+	sim = BattleSim.new(sim_seed)
 	sim.configure_board(_board_bounds())
 	for e in deploy_entities:
 		sim.add_entity(_make_entity(e))
@@ -328,8 +328,13 @@ func _run_battle(skill_entries: Array) -> void:
 	sim.run(4800)  # 上限 240 秒(3 倍血长线战斗;超时不判胜负则按未分晓收尾)
 	total_ticks = maxi(sim.tick, 1)
 	effects = sim.events.duplicate(true)
+	# 战报(结构化结果;第 4 步结算消费)
+	var scenario := BattleScenario.new()
+	scenario.init_build(str(battle_map.id), current_pack_id, sim_seed, [], [])
+	last_report = BattleReport.new().build(sim, scenario)
+	GameApp.run.expedition["last_report"] = last_report
 	# 快照重放(末尾一条为"结算收尾"状态: 存活单位回到站姿)
-	var run := BattleSim.new(7)
+	var run := BattleSim.new(sim_seed)
 	run.configure_board(_board_bounds())
 	for e in deploy_entities:
 		run.add_entity(_make_entity(e))

@@ -319,6 +319,9 @@ func run(max_ticks: int = 2400) -> int:
 			break
 		if retreat_called:
 			break
+	# 超时上限: 无判定结果的战斗标记 timeout(报告层可区分 draw/timeout)
+	if battle_result.is_empty():
+		battle_result = "timeout"
 	_settle_all()
 	return tick
 
