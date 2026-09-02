@@ -46,18 +46,26 @@ func adjudicate(facts: Dictionary, app: String) -> Dictionary:
 			"cited_fact_ids": [], "missing": [], "refuse_reason": "remote_ai_not_configured", "draft": ""})
 	var msgs := cached_context.duplicate(true)
 	msgs.append({"role": "user", "content": app})
+	var content := _chat_once(endpoint, key, model, msgs)
+	# 推理引擎(deepseek-v4-flash)在 json_object 下经常只在 reasoning_content 出草稿、
+	# content 为空或非 JSON —— 自动降级到对话引擎 deepseek-chat 重试一次
+	var turn := parse_turn_from_llm(content)
+	if str(turn.get("refuse_reason", "")) == "remote_parse_failed":
+		var fallback: String = "deepseek-chat"
+		var content2 := _chat_once(endpoint, key, fallback, msgs)
+		var turn2 := parse_turn_from_llm(content2)
+		if str(turn2.get("refuse_reason", "")) != "remote_parse_failed":
+			turn = turn2
+	return Base.normalize(turn)
+
+
+## 单次对话请求(推理引擎 content 空时兜底 reasoning_content)
+static func _chat_once(endpoint: String, key: String, model: String, msgs: Array) -> String:
 	var body := JSON.stringify({"model": model, "messages": msgs, "max_tokens": 4096,
 		"response_format": {"type": "json_object"}})
-	# 端点需要补全为 /chat/completions(与探针一致;base 地址直接 POST 会 404)
 	var full_endpoint := HttpProbe.normalize_endpoint(endpoint)
 	var resp := _http_post(full_endpoint, key, body)
-	if not resp.get("ok", false):
-		return Base.normalize({
-			"stance": "REFUSE",
-			"speech": "云端神座降下闷雷: " + str(resp.get("error", "网络异常")),
-			"cited_fact_ids": [], "missing": [], "refuse_reason": "remote_api_error", "draft": ""})
-	var turn := parse_turn_from_llm(str(resp.get("content", "")))
-	return Base.normalize(turn)
+	return str(resp.get("content", ""))
 
 
 ## LLM 输出 -> DivineTurn(提取 JSON 对象;失败则容错为 REFUSE 并附原文片段)
@@ -124,7 +132,12 @@ static func _http_post(endpoint: String, key: String, body: String, timeout_s: i
 			var choices: Variant = parsed.get("choices", [])
 			if typeof(choices) == TYPE_ARRAY and choices.size() > 0:
 				var msg: Dictionary = choices[0].get("message", {})
-				return {"ok": true, "content": str(msg.get("content", ""))}
+				var content := str(msg.get("content", ""))
+				# 推理模型(deepseek-v4-flash 等)常把回复放 reasoning_content:
+				# content 为空时以 reasoning_content 兜底(JSON 可能就在其中)
+				if content.strip_edges() == "":
+					content = str(msg.get("reasoning_content", ""))
+				return {"ok": true, "content": content}
 		return {"ok": false, "error": "响应结构异常"}
 	var detail := txt.left(200).replace("\n", " ")
 	return {"ok": false, "error": "HTTP %d %s" % [code, detail]}
