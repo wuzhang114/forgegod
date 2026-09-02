@@ -31,6 +31,40 @@ static func cells_in_range(c: Vector2i, radius: int) -> Array:
 	return out
 
 
+## 连线格(supercover 近似): a -> b 沿途经过的格(含两端)
+static func cells_in_line(a: Vector2i, b: Vector2i) -> Array:
+	var n := dist(a, b)
+	if n <= 0:
+		return [a]
+	var out: Array = []
+	for i in n + 1:
+		var t := float(i) / float(n)
+		var qf := (1.0 - t) * float(a.x) + t * float(b.x)
+		var rf := (1.0 - t) * float(a.y) + t * float(b.y)
+		out.append(axial_round(qf, rf))
+	return out
+
+
+## 锥形范围: c 沿 dir_idx 方向(±60°) radius 内的格(不含自身)
+static func cells_in_front(c: Vector2i, dir_idx: int, radius: int) -> Array:
+	var out: Array = []
+	if radius <= 0:
+		return out
+	var dir_v := to_pixel(c + DIRS[wrapi(dir_idx, 0, 6)], 1.0) - to_pixel(c, 1.0)
+	if dir_v.length() < 0.001:
+		return out
+	dir_v = dir_v.normalized()
+	for other in cells_in_range(c, radius):
+		if other == c:
+			continue
+		var v := to_pixel(other, 1.0) - to_pixel(c, 1.0)
+		if v.length() < 0.001:
+			continue
+		if v.normalized().dot(dir_v) >= 0.5:
+			out.append(other)
+	return out
+
+
 ## 沿方向的单步移动(用于击退/dash);bypass_occupied 由调用方检查
 static func step_from(c: Vector2i, dir_index: int, steps: int) -> Vector2i:
 	return c + DIRS[wrapi(dir_index, 0, 6)] * steps

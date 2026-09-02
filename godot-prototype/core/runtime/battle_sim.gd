@@ -37,6 +37,8 @@ var board_q_max := BOARD_Q_MAX
 var board_r_min := BOARD_R_MIN
 var board_r_max := BOARD_R_MAX
 var blocked_cells: Dictionary = {}
+## 格效果(地形/羁绊修饰层): id -> {id, cell, owner, kind, lifetime}(lifetime<0 永续)
+var cell_effects: Dictionary = {}
 
 const SIM_CONTRACT := SimContract
 
@@ -61,6 +63,69 @@ func configure_board(bounds: Dictionary) -> void:
 func is_inside_board(c: Vector2i) -> bool:
 	return c.x >= board_q_min and c.x <= board_q_max \
 			and c.y >= board_r_min and c.y <= board_r_max
+
+
+## ---------------- 格效果(棋盘修饰层) ----------------
+
+## 在格子上放置效果(如火坑/淬火格/诅咒地);lifetime<0 永续。返回效果 id。
+func add_cell_effect(cell: Vector2i, owner_id: String, kind: String, lifetime: int = -1) -> String:
+	var eid := "ce_%d" % (cell_effects.size() + 1)
+	cell_effects[eid] = {"id": eid, "cell": cell, "owner": owner_id,
+		"kind": kind, "lifetime": lifetime}
+	return eid
+
+
+func remove_cell_effect(eid: String) -> void:
+	cell_effects.erase(eid)
+
+
+func has_cell_effect(cell: Vector2i, kind: String) -> bool:
+	for fx in cell_effects.values():
+		if fx.cell == cell and fx.kind == kind:
+			return true
+	return false
+
+
+## 该格的全部效果简要列表(供契约/表现使用)
+func cell_effects_of(cell: Vector2i) -> Array:
+	var out: Array = []
+	for fx in cell_effects.values():
+		if fx.cell == cell:
+			out.append({"id": fx.id, "kind": fx.kind, "owner": fx.owner})
+	return out
+
+
+func _effects_by_cell(cell: Vector2i) -> Array:
+	return cell_effects_of(cell)
+
+
+## 每 tick 衰减格效果寿命
+func _tick_cell_effects() -> void:
+	if cell_effects.is_empty():
+		return
+	for eid in cell_effects.keys().duplicate():
+		var fx: Dictionary = cell_effects[eid]
+		if int(fx.lifetime) < 0:
+			continue
+		fx.lifetime = int(fx.lifetime) - 1
+		if int(fx.lifetime) <= 0:
+			cell_effects.erase(eid)
+
+
+## 单位从 from 移动到 to: 触发格子进出效果事件(仅有格效果时才广播,零开销)
+func _emit_cell_events(u: Dictionary, from: Vector2i, to: Vector2i) -> void:
+	if cell_effects.is_empty() or from == to:
+		return
+	var out_fx := _effects_by_cell(from)
+	if not out_fx.is_empty():
+		push_event({"kind": "cell_exit", "source_id": u.id, "target_id": u.id,
+			"cell": from, "effects": out_fx, "tick": tick})
+		_broadcast_for(u.id, "cell_exit", {"unit": u, "cell": from, "effects": out_fx, "tick": tick})
+	var in_fx := _effects_by_cell(to)
+	if not in_fx.is_empty():
+		push_event({"kind": "cell_enter", "source_id": u.id, "target_id": u.id,
+			"cell": to, "effects": in_fx, "tick": tick})
+		_broadcast_for(u.id, "cell_enter", {"unit": u, "cell": to, "effects": in_fx, "tick": tick})
 
 
 ## ---------------- 实体与注册 ----------------
@@ -167,12 +232,13 @@ func tick_once() -> void:
 	for ent in entities.values():
 		if ent.alive and ent.current_action.is_empty():
 			decide(ent)
-	# 弹道/区域/光束/墙/召唤物
+	# 弹道/区域/光束/墙/召唤物/格效果
 	_tick_projectiles()
 	_tick_zones()
 	_tick_beams()
 	_tick_walls()
 	_tick_summons()
+	_tick_cell_effects()
 	# 状态到期
 	if tick % 50 == 0:
 		for ent in entities.values():
@@ -365,6 +431,7 @@ func _step_toward(e: Dictionary, goal: Vector2i, interval: int) -> void:
 	if dir_i != -1:
 		var n: Vector2i = e.grid + Grid.DIRS[dir_i]
 		if _cell_free(n):
+			_emit_cell_events(e, e.grid, n)
 			e.grid = n
 			return
 	# 绕行: 找"距离不增加"的邻居空位(否则等待)
@@ -376,6 +443,7 @@ func _step_toward(e: Dictionary, goal: Vector2i, interval: int) -> void:
 			best = cand
 			best_d = Grid.dist(cand, goal)
 	if best != e.grid:
+		_emit_cell_events(e, e.grid, best)
 		e.grid = best
 
 
@@ -392,6 +460,7 @@ func _step_away(e: Dictionary, foes: Dictionary, interval: int) -> void:
 		return
 	var n: Vector2i = e.grid + Grid.DIRS[dir_i]
 	if _cell_free(n):
+		_emit_cell_events(e, e.grid, n)
 		e.grid = n
 
 
@@ -590,6 +659,32 @@ func enemies_in_radius(center: Dictionary, radius: int) -> Array:
 	return out
 
 
+## 半径内最近活敌(平局取遍历首个含 deterministic 顺序)
+func closest_enemy_in_radius(center: Dictionary, radius: int) -> Dictionary:
+	var best := {}
+	var best_d := 999999
+	for e in entities.values():
+		if not e.alive or e.faction == center.faction:
+			continue
+		var d := Grid.dist(center.grid, e.grid)
+		if d <= radius and d < best_d:
+			best_d = d
+			best = {"id": e.id}
+	return best
+
+
+## 击退落点: 从 origin 沿 dir_idx 方向最多 steps 格,遇墙/越界/占用处截断(返回实际到达格)
+func find_knockback_cell(origin: Vector2i, dir_idx: int, steps: int) -> Vector2i:
+	var cur := origin
+	var d: Vector2i = Grid.DIRS[wrapi(dir_idx, 0, 6)]
+	for i in steps:
+		var nxt: Vector2i = origin + d * (i + 1)
+		if not is_inside_board(nxt) or blocked_cells.has(nxt):
+			break
+		cur = nxt
+	return cur
+
+
 ## 全部活敌(供 all_enemies 查询)
 func all_enemies_of(center: Dictionary) -> Array:
 	var out: Array = []
@@ -670,6 +765,7 @@ func _tick_zones() -> void:
 						if dir_i != -1:
 							var n: Vector2i = ent.grid + Grid.DIRS[dir_i]
 							if _cell_free(n):
+								_emit_cell_events(ent, ent.grid, n)
 								ent.grid = n
 
 

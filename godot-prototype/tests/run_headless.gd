@@ -14,6 +14,7 @@ const CatalogA := preload("res://tests/mechlang_catalog_a.gd")
 const CatalogB := preload("res://tests/mechlang_catalog_b.gd")
 const BattleTests := preload("res://tests/test_battle_sim.gd")
 const BattleB2 := preload("res://tests/test_battle_b2.gd")
+const BoardFxTests := preload("res://tests/test_board_effects.gd")
 const ForgeTests := preload("res://tests/test_forge.gd")
 const GodTests := preload("res://tests/test_scripted_god.gd")
 const BalanceTests := preload("res://tests/test_balance.gd")
@@ -775,6 +776,7 @@ func _initialize() -> void:
 	_test_vm_overload()
 	_test_battle_b1()
 	_test_battle_b2()
+	_test_board_fx()
 	_test_forge_core()
 	_test_scripted_god()
 	_test_balance()
@@ -1681,6 +1683,13 @@ func _test_battle_b2() -> void:
 	var t := BattleB2.new()
 	var r: Dictionary = t.run()
 	_check(r.ok, "B2 战斗 sim: 通过 %d / 失败 %d" % [r.pass, r.fail])
+
+
+func _test_board_fx() -> void:
+	var t := BoardFxTests.new()
+	var r: Dictionary = t.run()
+	print("-- 格效果层: 通过 %d / 失败 %d --" % [r.pass, r.fail])
+	_check(r.ok, "格效果层测试全绿")
 
 
 func _test_forge_core() -> void:
