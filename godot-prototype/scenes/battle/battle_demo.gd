@@ -37,7 +37,10 @@ device 蓄能盾击 {
 
 const HEX_SIZE := 50.0
 const Y_SQUASH := 0.54
-const BOARD_CENTER := Vector2(640, 390)
+const BOARD_TILT_DEG := 12.0  # 整个六边形战场轻微偏转(视觉风格)
+const BOARD_CENTER := Vector2(640, 430)  # 兜底;实际每张地图用 ground_y(贴地面带)
+const TILT_C := 0.9781476007   # cos(12°)
+const TILT_S := 0.2079116908   # sin(12°)
 
 ## 每张图只承担环境与平整地面，中心棋盘由 _draw_board() 叠加。
 const BATTLE_BACKGROUNDS := {
@@ -52,16 +55,16 @@ const BATTLE_BACKGROUNDS := {
 const BATTLE_MAPS := [
 	{"id": "forge_courtyard", "label": "熔炉庭院", "q_min": 0, "q_max": 8,
 		"r_min": 0, "r_max": 4, "player_q_min": 0, "player_q_max": 2,
-		"enemy_q_min": 6, "enemy_q_max": 8, "gap_q": 4},
+		"enemy_q_min": 6, "enemy_q_max": 8, "gap_q": 4, "ground_y": 420},
 	{"id": "ruined_road", "label": "断垣关道", "q_min": 0, "q_max": 7,
 		"r_min": 0, "r_max": 4, "player_q_min": 0, "player_q_max": 1,
-		"enemy_q_min": 6, "enemy_q_max": 7, "gap_q": 4},
+		"enemy_q_min": 6, "enemy_q_max": 7, "gap_q": 4, "ground_y": 468},
 	{"id": "crystal_mine", "label": "蓝晶矿窟", "q_min": 0, "q_max": 6,
 		"r_min": 0, "r_max": 3, "player_q_min": 0, "player_q_max": 1,
-		"enemy_q_min": 5, "enemy_q_max": 6, "gap_q": 3},
+		"enemy_q_min": 5, "enemy_q_max": 6, "gap_q": 3, "ground_y": 395},
 	{"id": "autumn_shrine", "label": "秋枫神台", "q_min": 0, "q_max": 8,
 		"r_min": 0, "r_max": 3, "player_q_min": 0, "player_q_max": 2,
-		"enemy_q_min": 6, "enemy_q_max": 8, "gap_q": 4},
+		"enemy_q_min": 6, "enemy_q_max": 8, "gap_q": 4, "ground_y": 434},
 ]
 
 const HERO_COLORS := {"guard": Color(0.35, 0.65, 1.0), "duelist": Color(1.0, 0.55, 0.2),
@@ -115,10 +118,14 @@ func _ready_contract() -> void:
 
 ## ---------------- 坐标 ----------------
 
+## 战场整体偏转(行向倾斜),格与六边形共用同一变换,保证拼接对齐。
+func _tilt(v: Vector2) -> Vector2:
+	return Vector2(v.x * TILT_C - v.y * TILT_S, v.x * TILT_S + v.y * TILT_C)
+
+
 func px_of(grid: Vector2i) -> Vector2:
 	var p := Grid.to_pixel(grid, HEX_SIZE)
-	var proj := Vector2(p.x, p.y * Y_SQUASH)
-	return board_origin + proj
+	return board_origin + _tilt(Vector2(p.x, p.y * Y_SQUASH))
 
 
 func pick_grid(mouse_px: Vector2) -> Vector2i:
@@ -154,7 +161,9 @@ func _recenter_board() -> void:
 	var min_px := Grid.to_pixel(Vector2i(int(battle_map.q_min), int(battle_map.r_min)), HEX_SIZE)
 	var max_px := Grid.to_pixel(Vector2i(int(battle_map.q_max), int(battle_map.r_max)), HEX_SIZE)
 	var center := Vector2((min_px.x + max_px.x) * 0.5, (min_px.y + max_px.y) * 0.5 * Y_SQUASH)
-	board_origin = BOARD_CENTER - center
+	# 中心竖坐标跟随该地图的地面带(由背景采样定标),让棋盘与地面贴合
+	var ground_y := float(battle_map.get("ground_y", int(BOARD_CENTER.y)))
+	board_origin = Vector2(BOARD_CENTER.x, ground_y) - _tilt(center)
 
 
 func _board_bounds() -> Dictionary:
@@ -256,6 +265,10 @@ func _begin_battle() -> void:
 	run.add_contract("c_bulwark", checked.ast, "hero_1",
 		{"id": "w_1", "max_durability": 100.0, "durability": 100.0, "defects": []})
 	snapshots = []
+	# 清理上一次战斗残留的纸片人(重开战斗时必须释放旧节点,否则幽灵残影叠加)
+	for u in unit_nodes.values():
+		if is_instance_valid(u):
+			u.queue_free()
 	unit_nodes = {}
 	for _t in range(total_ticks):
 		run.tick_once()
@@ -322,8 +335,9 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
-## 重放: 跳转到任意 tick(立即刷新单位与特效,不播移动动画)
+## 重放: 跳转到任意 tick(立即刷新单位与特效,不播移动动画;跳转即暂停,便于细看)
 func _set_tick(t: int) -> void:
+	paused = true
 	play_tick = clampi(t, 0, total_ticks)
 	_update_units(false)
 	_dispatch_effects(play_tick)
@@ -419,17 +433,7 @@ func _draw_hd2d_bg() -> void:
 
 
 func _draw_board() -> void:
-	var min_p := Vector2(INF, INF)
-	var max_p := Vector2(-INF, -INF)
-	for q in range(int(battle_map.get("q_min", 0)), int(battle_map.get("q_max", 7)) + 1):
-		for r in range(int(battle_map.get("r_min", 0)), int(battle_map.get("r_max", 4)) + 1):
-			var cell_p := px_of(Vector2i(q, r))
-			min_p = min_p.min(cell_p)
-			max_p = max_p.max(cell_p)
-	var board_rect := Rect2(min_p - Vector2(HEX_SIZE, HEX_SIZE * 0.75),
-			max_p - min_p + Vector2(HEX_SIZE * 2.0, HEX_SIZE * 1.5))
-	draw_rect(board_rect, Color(0.04, 0.04, 0.05, 0.28), true)
-	draw_rect(board_rect, Color(0.95, 0.78, 0.42, 0.36), false, 2.0)
+	# 只画六边形(无大矩形底框),六边形随战场整体偏转
 	for q in range(int(battle_map.get("q_min", 0)), int(battle_map.get("q_max", 7)) + 1):
 		for r in range(int(battle_map.get("r_min", 0)), int(battle_map.get("r_max", 4)) + 1):
 			var c := Vector2i(q, r)
@@ -454,7 +458,8 @@ func _hex_pts(p: Vector2) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	for i in 6:
 		var ang := deg_to_rad(60.0 * i - 30.0)
-		out.append(p + Vector2(cos(ang), sin(ang) * Y_SQUASH) * (HEX_SIZE - 2.0))
+		# 顶点按战场同一偏转变换,相邻六边形拼接保持对齐
+		out.append(p + _tilt(Vector2(cos(ang), sin(ang) * Y_SQUASH)) * (HEX_SIZE - 2.0))
 	return out
 
 
@@ -497,6 +502,7 @@ class UnitNode:
 	var alive := true
 	var bob := 0.0
 	var texture: Texture2D = null
+	var mv_tween: Tween = null
 
 	func _init(id: String, c: Color, p: Vector2, tex: Texture2D = null) -> void:
 		eid = id
@@ -513,6 +519,10 @@ class UnitNode:
 		alive = e.alive
 		# 死亡单位彻底隐藏(重放时同样生效)
 		visible = alive
+		# 任何位置变更前先杀掉在途移动 tween: 回放跳转后旧 tween 会把单位拖去过期位置
+		if mv_tween and mv_tween.is_valid():
+			mv_tween.kill()
+			mv_tween = null
 		# 移动/转向: 格变化时朝目标方向翻面 + 滑动(重放跳转则直接落位)
 		if e.grid != grid:
 			var dir := 1.0 if e.grid.x >= grid.x else -1.0
@@ -520,8 +530,8 @@ class UnitNode:
 				_flip()
 			grid = e.grid
 			if animate:
-				var tw := create_tween()
-				tw.tween_property(self, "position", px, 0.22).set_trans(Tween.TRANS_SINE)
+				mv_tween = create_tween()
+				mv_tween.tween_property(self, "position", px, 0.22).set_trans(Tween.TRANS_SINE)
 			else:
 				position = px
 		elif not animate:
