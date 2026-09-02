@@ -16,82 +16,16 @@ const MapTemplates := preload("res://domain/battle/map_templates.gd")
 const EnemyPacks := preload("res://domain/battle/enemy_packs.gd")
 const BattleScenario := preload("res://domain/battle/battle_scenario.gd")
 const BattleReport := preload("res://domain/battle/battle_report.gd")
+const ContentRegistry := preload("res://domain/content/content_registry.gd")
 
-const SRC_BULWARK := """
-device 蓄能盾击 {
-  budget: { steps: 24, cooldown: 120 }
-  state: { charge: 0 }
-  on block {
-    charge = min(charge + blocked_damage * 0.2, 8)
-  }
-  on heavy_blow {
-    if charge >= 8 {
-      damage(target, "impact", 12)
-      charge = 0
-    }
-  }
-  on overload {
-    if charge >= 4 {
-      damage(target, "impact", 30)
-      charge = 0
-      damage_weapon(4)
-    }
-  }
-}
-"""
+## 演示契约(默认蓄能盾击)与三主动技模板均在 ContentRegistry(唯一内容源)。
+## 玩家契约(全流程)来自 GameSession.divine_contract,优先于默认模板。
 
-const SRC_QUAKE := """
-device 震地怒涛 {
-  auth: item
-  budget: { entities: 12, steps: 32, cooldown: 300 }
-  on right_click {
-    for e in units_in_range(2) {
-      apply_status(e, "stunned", 60)
-    }
-    damage_weapon(3)
-  }
-}
-"""
+const SRC_QUAKE := ""
 
-const SRC_SCORCH := """
-device 灼烧之种 {
-  auth: item
-  traits: { guaranteed_hit: true }
-  budget: { entities: 12, steps: 24, cooldown: 240 }
-  state: { lit: 0 }
-  on right_click {
-    scorch(120)
-    lit = 1
-  }
-  on timer {
-    if lit == 1 {
-      for e in scorched_units() {
-        damage(e, "fire", 4)
-        apply_status(e, "burning", 60)
-      }
-    }
-  }
-}
-"""
+const SRC_SCORCH := ""
 
-const SRC_LIFE := """
-device 嗜血之舞 {
-  auth: item
-  budget: { entities: 4, steps: 20, cooldown: 480 }
-  state: { charges: 0 }
-  on right_click {
-    charges = 3
-    empower(3, 1.6)
-  }
-  on hit {
-    if charges > 0 {
-      heal_self(attack_damage * 0.5)
-      heal(nearest_ally(self), attack_damage * 0.5)
-      charges -= 1
-    }
-  }
-}
-"""
+const SRC_LIFE := ""
 
 const HEX_SIZE := 50.0
 const Y_SQUASH := 0.54
@@ -157,9 +91,9 @@ func _ready() -> void:
 	_process_ui()
 
 
-## 从会话读契约(全流程);否则用内置演示契约
+## 从会话读契约(全流程);否则用内置演示契约(ContentRegistry)
 func _ready_contract() -> void:
-	contract_src = SRC_BULWARK
+	contract_src = str(ContentRegistry.contract_template("bulwark").src)
 	var Session := preload("res://core/flow/game_session.gd")
 	if not Session.divine_contract.is_empty() and str(Session.divine_contract.get("source", "")).strip_edges() != "":
 		contract_src = str(Session.divine_contract.source)
@@ -311,11 +245,11 @@ func _run_battle(skill_entries: Array) -> void:
 		sim.add_entity(_make_entity(e))
 	var ast := Parser.new().parse(contract_src)
 	var checked := Checker.new().check(ast.ast)
-	var qast := Parser.new().parse(SRC_QUAKE)
+	var qast := Parser.new().parse(str(ContentRegistry.contract_template("quake").src))
 	var qchecked := Checker.new().check(qast.ast)
-	var sast := Parser.new().parse(SRC_SCORCH)
+	var sast := Parser.new().parse(str(ContentRegistry.contract_template("scorch").src))
 	var schecked := Checker.new().check(sast.ast)
-	var last := Parser.new().parse(SRC_LIFE)
+	var last := Parser.new().parse(str(ContentRegistry.contract_template("lifesteal").src))
 	var lchecked := Checker.new().check(last.ast)
 	# 多个契约共享同一武器对象: 任一契约扣耐久,UI 与另一契约都能读到(用户可见)
 	var weapon := _battle_weapon()

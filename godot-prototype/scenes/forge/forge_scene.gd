@@ -6,6 +6,7 @@
 extends Node2D
 
 const Forge := preload("res://core/forge/forge_core.gd")
+const ForgeCalculator := preload("res://domain/weapon/forge_calculator.gd")
 
 const STAGES := [
 	{"id": "melt", "name": "① 熔炼"},
@@ -303,7 +304,7 @@ func _build_assemble() -> void:
 		func(on: bool): balance_bias = on; _update_facts(); _refresh_center())
 
 
-## ---------------- 基础属性面板(实时) ----------------
+## ---------------- 基础属性面板(实时;唯一来源 ForgeCalculator) ----------------
 
 func _build_stats_panel() -> void:
 	ui.stats_holder = VBoxContainer.new()
@@ -334,21 +335,16 @@ func _build_stats_panel() -> void:
 		h.add_child(v)
 		ui.stats_holder.add_child(h)
 		ui.stats[key] = {"bar": bar, "label": v}
+	# 战斗换算(预览 == 战斗同通道;面板所见即战斗所用)
+	ui.combat = Label.new()
+	ui.combat.add_theme_font_size_override("font_size", 12)
+	ui.combat.modulate = Color(0.75, 0.9, 0.75)
+	ui.stats_holder.add_child(ui.combat)
 
 
 func _stats() -> Dictionary:
-	var ma: Dictionary = Forge.MATERIALS[parts.action]
-	var mb: Dictionary = Forge.MATERIALS[parts.bearing]
-	var mc: Dictionary = Forge.MATERIALS[parts.control]
-	var mm: Dictionary = Forge.MATERIALS.get(parts.medium, Forge.MATERIALS["grey_iron"])
-	var center_ok: float = 0.5 - absf(float(size.balance) - 0.5)
-	var atk := int(round(float(ma.hardness) * 6.0 + float(size.thickness) * 18.0 + (1.0 - float(size.length)) * 8.0))
-	var tough := int(round(float(mb.toughness) * 7.0 + center_ok * 20.0))
-	var speed := int(round(20.0 + (1.0 - float(mc.density)) * 7.0 + (1.0 - float(size.length)) * 10.0))
-	var ctrl := int(round(float(mc.stability) * 7.0 + center_ok * 30.0))
-	var cond := int(round(float(mm.conduction) * 7.0 + float(ma.conduction) * 1.5))
-	var stab := int(round((float(ma.stability) + float(mb.stability) + float(mc.stability)) / 3.0 * 7.0))
-	return {"攻击": atk, "坚韧": tough, "速度": speed, "操控": ctrl, "导能": cond, "稳定": stab}
+	# 唯一归属: ForgeCalculator.material_preview(公式不再在此散落第二套)
+	return ForgeCalculator.material_preview(parts, size)
 
 
 func _update_stats() -> void:
@@ -356,8 +352,23 @@ func _update_stats() -> void:
 		return
 	var s := _stats()
 	for k in s.keys():
+		if not ui.stats.has(k):
+			continue
 		ui.stats[k].bar.value = float(s[k])
 		ui.stats[k].label.text = str(s[k])
+	# 战斗换算(预览 == 战斗同一 build 通道;面板数值 = 战斗生效数值)
+	var craft_choices := {"purity_roll": purity_roll, "quench": quench, "temper": temper,
+		"keep_stress": keep_stress, "techniques": techniques, "balance_bias": balance_bias,
+		"style": "steady"}
+	var preview := ForgeCalculator.preview_build("preview", kind, parts, size, craft_choices)
+	var cs := ForgeCalculator.combat_summary(preview)
+	if ui.has("combat"):
+		var txt: Array = []
+		for k in ["攻×", "暴×", "破甲+", "独立+", "耐久", "攻速×"]:
+			txt.append("%s %s" % [k, str(cs[k])])
+		ui.combat.text = "战斗换算: " + " · ".join(txt)
+		if (cs.get("缺陷", []) as Array).size() > 0:
+			ui.combat.text += "\n缺陷: " + "、".join(cs.get("缺陷", []))
 
 
 ## ---------------- 流程控制 ----------------
