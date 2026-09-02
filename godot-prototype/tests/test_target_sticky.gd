@@ -5,6 +5,7 @@ extends RefCounted
 
 const DefEntity := preload("res://core/runtime/sim_entity.gd")
 const BattleSim := preload("res://core/runtime/battle_sim.gd")
+const Grid := preload("res://core/runtime/hex_grid.gd")
 
 var _passes := 0
 var _fails := 0
@@ -93,11 +94,13 @@ func _test_move_sticky() -> void:
 		sim.tick_once()
 	_check(a.grid.x > x0, "朝粘性目标移动(实际 x %d -> %d)" % [x0, a.grid.x])
 	_check(a.cur_target == "mob_b", "移动过程中粘性目标不变")
-	# 窗口过期: tick_once 递减 sticky_ticks;续跑至窗口结束应转向最近敌 mob_a
+	# 窗口过期(60 tick): 续跑至过期后,cur_target 应重新绑定为"当前最近敌"并刷新窗口
 	for i in 80:
 		sim.tick_once()
-	_check(a.cur_target == "mob_a", "窗口过期后转向最近敌")
-	_check(int(a.sticky_ticks) == BattleSim.TARGET_STICKY_TICKS or int(a.sticky_ticks) >= 0,
-		"粘性字段维持合法区间")
+	var d_a: int = Grid.dist(a.grid, w.na.grid)
+	var d_b: int = Grid.dist(a.grid, nb.grid)
+	var expect: String = "mob_a" if d_a <= d_b else "mob_b"
+	_check(a.cur_target == expect, "窗口过期后绑定最近敌 (期望 %s 实际 %s)" % [expect, a.cur_target])
+	_check(int(a.sticky_ticks) > 0, "过期后刷新粘性窗口且仍在有效 (当前 %d)" % int(a.sticky_ticks))
 	# mob_b 仍存活(未被击杀)
 	_check(nb.alive, "远目标未被击杀")

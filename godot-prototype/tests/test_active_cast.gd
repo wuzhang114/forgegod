@@ -29,6 +29,7 @@ func run() -> Dictionary:
 	_test_units_api()
 	_test_cast_end_to_end()
 	_test_cooldown()
+	_test_stun_blocks_move()
 	return {"ok": _fails == 0, "pass": _passes, "fail": _fails}
 
 
@@ -102,6 +103,29 @@ func _test_cast_end_to_end() -> void:
 		if entry.get("cmd") == "active" and int(entry.get("tick", -1)) == 10:
 			scheduled = true
 	_check(scheduled, "input_log 记录主动指令")
+
+
+func _test_stun_blocks_move() -> void:
+	# 眩晕(硬控)应同时锁移动: 被眩晕单位不再自主移动
+	var sim := BattleSim.new(7)
+	var hero := _mk("hero_1", Vector2i(0, 2), "hero", "player")
+	var mob := _mk("mob_1", Vector2i(5, 2), "enemy", "enemy")
+	DefEntity.apply_status(mob, "stunned", 99999, "t")
+	sim.add_entity(hero)
+	sim.add_entity(mob)
+	var g0: Vector2i = mob.grid
+	for i in 80:
+		sim.tick_once()
+	_check(mob.grid == g0, "昏迷单位原地不动 (实际 %s)" % str(mob.grid))
+	# 对照组: 未眩晕的同一布局会向对手移动
+	var sim2 := BattleSim.new(7)
+	var hero2 := _mk("hero_2", Vector2i(0, 2), "hero", "player")
+	var mob2 := _mk("mob_2", Vector2i(5, 2), "enemy", "enemy")
+	sim2.add_entity(hero2)
+	sim2.add_entity(mob2)
+	for i in 80:
+		sim2.tick_once()
+	_check(mob2.grid.x < 5, "无眩晕对照仍在移动 (实际 %s)" % str(mob2.grid))
 
 
 func _test_cooldown() -> void:

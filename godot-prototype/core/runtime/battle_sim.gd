@@ -458,16 +458,13 @@ func mechanic_damage(source_id: String, target: Dictionary, dmg_type: String, am
 ## ---------------- 移动 ----------------
 
 func _move_toward_target(e: Dictionary) -> void:
-	# 粘性窗口每 tick 递减(攻击/移动中均生效;重锁定时刷新)
-	if int(e.get("sticky_ticks", 0)) > 0:
-		e.sticky_ticks = int(e.sticky_ticks) - 1
 	if not e.alive:
 		return
 	if not e.current_action.is_empty():
 		return
 	var mult: float = DefEntity.move_speed_mult(e)
-	# 定身: 不能移动
-	if DefEntity.has_status(e, "rooted"):
+	# 定身/硬控(眩晕/冻结/麻痹/浮空): 不能自主移动(外力位移仍可生效,如击退/拉拽)
+	if DefEntity.has_status(e, "rooted") or DefEntity.is_hard_cc(e):
 		return
 	var foes := DefEntity.nearest_enemy_of(e, entities, 999)
 	# 恐惧: 背离最近敌人移动
@@ -481,8 +478,12 @@ func _move_toward_target(e: Dictionary) -> void:
 	if target.is_empty():
 		return
 	var d := Grid.dist(e.grid, target.grid)
+	# 射程内: 无需移动(攻击中的目标锁定不消耗粘性窗口,死亡/转火才换)
 	if d <= int(e.range_hex):
 		return
+	# 需要移动追逐: 消耗粘性窗口(过期后 decide 重新绑定最近敌,防摇摆)
+	if int(e.get("sticky_ticks", 0)) > 0:
+		e.sticky_ticks = int(e.sticky_ticks) - 1
 	_step_toward(e, target.grid, int(maxf(e.move_interval, 1.0) / maxf(mult, 0.1)))
 	# 射手被贴近到近战格 -> 后撤(每 2 个移动节拍反向)
 	if e.role == "ranger" and e.kind == "hero" and d == 1 and _enemy_alive() > 0:
