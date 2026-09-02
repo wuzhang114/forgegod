@@ -189,6 +189,32 @@ func units_on_cell(cell: Vector2i, exclude_faction: String = "") -> Array:
 	return out
 
 
+## 治疗(含治疗事件,表现层绿字)
+func heal_entity(t: Dictionary, amount: float) -> void:
+	if t.is_empty() or not t.alive or amount <= 0.0:
+		return
+	var healed: float = minf(t.hp + amount, t.max_hp) - t.hp
+	if healed <= 0.0:
+		return
+	t.hp = t.hp + healed
+	push_event({"kind": "healed", "source_id": "", "target_id": t.id,
+		"amount": healed, "tick": tick})
+
+
+## 最近友军(不含自身;供 nearest_ally 查询)
+func nearest_ally_of(center: Dictionary) -> Dictionary:
+	var best := {}
+	var best_d := 999999
+	for e in entities.values():
+		if not e.alive or e.id == center.id or e.faction != center.faction:
+			continue
+		var d := Grid.dist(center.grid, e.grid)
+		if d < best_d:
+			best_d = d
+			best = {"id": e.id}
+	return best
+
+
 ## ---------------- 实体与注册 ----------------
 
 func add_entity(ent: Dictionary) -> void:
@@ -350,6 +376,9 @@ func tick_once() -> void:
 func start_action(e: Dictionary, tag: String, target_id: String = "") -> void:
 	var def: Dictionary = DefAction.get_def(tag)
 	var mult: float = DefEntity.frame_mult(e)
+	# 攻速强化(empower): 剩余次数内动作帧缩短
+	if int(e.get("empower_left", 0)) > 0:
+		mult /= maxf(float(e.get("empower_mult", 1.0)), 1.0)
 	e.current_action = {
 		"tag": tag, "target_id": target_id, "phase": "windup", "t": 0,
 		"windup": maxi(int(float(def.windup) * mult), 1),
@@ -388,6 +417,9 @@ func _progress_action(e: Dictionary) -> void:
 		"recover":
 			if a.t >= a.recover:
 				e.current_action = {}
+				# 攻速强化次数随"完成一次动作"递减(empower 剩余攻击次数)
+				if int(e.get("empower_left", 0)) > 0:
+					e.empower_left = int(e.empower_left) - 1
 
 
 ## 判定窗开始: 结算一次攻击(远程且目标距离>1 时改为发射弹道,延迟到命中 tick 结算)

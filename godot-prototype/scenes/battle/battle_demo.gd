@@ -70,6 +70,25 @@ device 灼烧之种 {
 }
 """
 
+const SRC_LIFE := """
+device 嗜血之舞 {
+  auth: item
+  budget: { entities: 4, steps: 20, cooldown: 480 }
+  state: { charges: 0 }
+  on right_click {
+    charges = 3
+    empower(3, 1.6)
+  }
+  on hit {
+    if charges > 0 {
+      heal_self(attack_damage * 0.5)
+      heal(nearest_ally(self), attack_damage * 0.5)
+      charges -= 1
+    }
+  }
+}
+"""
+
 const HEX_SIZE := 50.0
 const Y_SQUASH := 0.54
 const TICKS_PER_SEC := 20.0  # 模拟 20Hz;面向用户的展示一律换算成秒
@@ -296,11 +315,14 @@ func _run_battle(skill_entries: Array) -> void:
 	var qchecked := Checker.new().check(qast.ast)
 	var sast := Parser.new().parse(SRC_SCORCH)
 	var schecked := Checker.new().check(sast.ast)
+	var last := Parser.new().parse(SRC_LIFE)
+	var lchecked := Checker.new().check(last.ast)
 	# 多个契约共享同一武器对象: 任一契约扣耐久,UI 与另一契约都能读到(用户可见)
 	var weapon := _battle_weapon()
 	sim.add_contract("c_bulwark", checked.ast, "hero_1", weapon)
 	sim.add_contract("c_quake", qchecked.ast, "hero_1", weapon)
 	sim.add_contract("c_scorch", schecked.ast, "hero_3", weapon)
+	sim.add_contract("c_life", lchecked.ast, "hero_2", weapon)
 	for entry in skill_entries:
 		sim.schedule_active(str(entry.cid), int(entry.at))
 	sim.run(4800)  # 上限 240 秒(3 倍血长线战斗;超时不判胜负则按未分晓收尾)
@@ -316,6 +338,7 @@ func _run_battle(skill_entries: Array) -> void:
 	run.add_contract("c_bulwark", checked.ast, "hero_1", weapon_run)
 	run.add_contract("c_quake", qchecked.ast, "hero_1", weapon_run)
 	run.add_contract("c_scorch", schecked.ast, "hero_3", weapon_run)
+	run.add_contract("c_life", lchecked.ast, "hero_2", weapon_run)
 	for entry in skill_entries:
 		run.schedule_active(str(entry.cid), int(entry.at))
 	snapshots = []
@@ -476,6 +499,8 @@ func _add_effect(ev: Dictionary) -> void:
 			_float(pos, "破甲!", Color(1.0, 0.7, 0.4))
 		"status_apply":
 			_float(pos, "+" + str(ev.get("status", "")), Color(0.9, 0.6, 0.4))
+		"healed":
+			_float(pos, "+%d" % int(ev.get("amount", 0.0)), Color(0.4, 1.0, 0.45))
 		"projectile_launch":
 			_spawn_projectile_fx(ev)
 		"active_cast":
@@ -838,6 +863,10 @@ func _build_ui() -> void:
 	ui.scorch_btn.text = "🔥 灼烧之种\n(射手·目标格)"
 	ui.scorch_btn.pressed.connect(func(): _cast_active("c_scorch"))
 	ui.skill_box.add_child(ui.scorch_btn)
+	ui.life_btn = Button.new()
+	ui.life_btn.text = "🌿 嗜血之舞\n(连击手·3次攻速+吸血)"
+	ui.life_btn.pressed.connect(func(): _cast_active("c_life"))
+	ui.skill_box.add_child(ui.life_btn)
 	# 时间轴滑杆(重放: 拖动任意跳转)
 	ui.slider = HSlider.new()
 	ui.slider.min_value = 0.0
@@ -911,6 +940,7 @@ func _process_ui() -> void:
 		# 主动技按钮冷却状态(契约侧 cooldown_until 驱动)
 		_refresh_skill_btn(ui.cast_btn, "c_quake", "🔥 震地眩晕\n(守卫·周围2格)")
 		_refresh_skill_btn(ui.scorch_btn, "c_scorch", "🔥 灼烧之种\n(射手·目标格)")
+		_refresh_skill_btn(ui.life_btn, "c_life", "🌿 嗜血之舞\n(连击手·3次攻速+吸血)")
 		# 重放提示
 		ui.tip.text = "拖动下方时间轴可回看任意时刻(自动暂停);⏮/⏪/⏩ 跳跃浏览"
 	else:
@@ -920,6 +950,8 @@ func _process_ui() -> void:
 		ui.cast_btn.disabled = true
 		ui.scorch_btn.text = "🔥 灼烧之种\n(战斗中可放)"
 		ui.scorch_btn.disabled = true
+		ui.life_btn.text = "🌿 嗜血之舞\n(战斗中可放)"
+		ui.life_btn.disabled = true
 
 
 ## 技能按钮冷却刷新(统一 冷却显示为秒)

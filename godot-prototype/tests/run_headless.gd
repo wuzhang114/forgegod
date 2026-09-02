@@ -20,6 +20,7 @@ const RangedTests := preload("res://tests/test_ranged_flight.gd")
 const WeaponStatsTests := preload("res://tests/test_weapon_stats.gd")
 const ActiveCastTests := preload("res://tests/test_active_cast.gd")
 const DotScorchTests := preload("res://tests/test_dot_scorch.gd")
+const LifeStealTests := preload("res://tests/test_lifesteal.gd")
 const ForgeTests := preload("res://tests/test_forge.gd")
 const GodTests := preload("res://tests/test_scripted_god.gd")
 const BalanceTests := preload("res://tests/test_balance.gd")
@@ -787,6 +788,7 @@ func _initialize() -> void:
 	_test_wstats()
 	_test_active()
 	_test_dot()
+	_test_lifesteal()
 	_test_forge_core()
 	_test_scripted_god()
 	_test_balance()
@@ -1735,6 +1737,13 @@ func _test_dot() -> void:
 	var r: Dictionary = t.run()
 	print("-- DoT/灼烧格: 通过 %d / 失败 %d --" % [r.pass, r.fail])
 	_check(r.ok, "DoT/灼烧格测试全绿")
+
+
+func _test_lifesteal() -> void:
+	var t := LifeStealTests.new()
+	var r: Dictionary = t.run()
+	print("-- 嗜血之舞: 通过 %d / 失败 %d --" % [r.pass, r.fail])
+	_check(r.ok, "嗜血之舞测试全绿")
 
 
 func _test_forge_core() -> void:

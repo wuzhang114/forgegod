@@ -66,6 +66,11 @@ class SimHost extends HostBase:
 					return {}
 				var e := DefEntity.nearest_enemy_of(h, sim.entities, 99999)
 				return {"id": e.get("id", "")} if not e.is_empty() else {}
+			"nearest_ally":
+				var h := holder()
+				if h.is_empty():
+					return {}
+				return sim.nearest_ally_of(h)
 			"distance":
 				var a := _resolve(args[0])
 				var b := _resolve(args[1])
@@ -199,7 +204,7 @@ class SimHost extends HostBase:
 			"heal_self":
 				var h := holder()
 				if not h.is_empty():
-					h.hp = minf(h.hp + float(args[0]), h.max_hp)
+					sim.heal_entity(h, float(args[0]))
 			"spawn_beam":
 				sim.spawn_beam(holder_id, int(args[0]), float(args[1]))
 			"create_wall":
@@ -208,6 +213,14 @@ class SimHost extends HostBase:
 				var cell: Vector2i = sim.scorch_cell(holder_id, int(args[0]))
 				if cell.x != -999:
 					weapon_state["scorch_cell"] = {"q": cell.x, "r": cell.y}
+			"heal":
+				var t := _resolve(args[0])
+				sim.heal_entity(t, float(args[1]))
+			"empower":
+				var h := holder()
+				if not h.is_empty():
+					h.empower_left = maxi(int(args[0]), 0)
+					h.empower_mult = clampf(float(args[1]), 1.0, 2.0)
 		return null
 
 	func count_entities() -> int:
@@ -254,6 +267,9 @@ func _init(cid: String, ast: Dictionary, sim_holder_id: String, weapon: Dictiona
 
 func on_event(event: String, ctx: Dictionary) -> Dictionary:
 	ctx["contract_id"] = contract_id
+	# 统一注入持有者引用(self 在契约内可用;伤害/治疗类事件依赖)
+	if not ctx.has("self"):
+		ctx["self"] = {"id": host.holder_id}
 	# 主动技冷却门控(right_click 由玩家调度触发;其余事件不门控)
 	if event == "right_click" and host.sim.tick < cooldown_until:
 		return {"triggered": false, "breached": false}

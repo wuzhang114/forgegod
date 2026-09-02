@@ -33,6 +33,8 @@ static func make(id: String, kind: String, faction: String, name: String, role: 
 		"statuses": {},                # status_id -> {ticks, stacks, source_id}
 		"weapon_shred": float(opt.get("weapon_shred", 0.0)),  # 武器词条破甲(锻造 trait)
 		"weapon_bonus": float(opt.get("weapon_bonus", 0.0)),  # 武器特性增伤(独立乘区,同桶加算)
+		"empower_left": int(opt.get("empower_left", 0)),      # 攻速强化剩余攻击次数(嗜血之舞)
+		"empower_mult": float(opt.get("empower_mult", 1.0)),  # 攻速倍率(封顶 2.0)
 		"current_action": {},          # {tag, target_id, phase, t, windup, active, recover}
 		"atk_speed": 1.0,              # 攻速倍率(动作帧时长 = 基础 / (1 + atk_speed 增量))
 		"alive": true,

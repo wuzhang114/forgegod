@@ -54,6 +54,8 @@ const ACTION_FUNCS := {
 	"spawn_beam": 2,        # (duration_ticks, damage) v0.2.1 沿攻击方向持续光束(太阳射线/终极闪光)
 	"create_wall": 2,       # (length, lifetime) v0.2.1 阻挡敌方投射物的规则墙(亚索风墙)
 	"scorch": 1,            # (lifetime) v0.5 当前攻击目标格点燃灼烧地面(灼烧之种)
+	"heal": 2,              # (target, amount) v0.5 治疗一个友军(嗜血之舞)
+	"empower": 2,           # (charge_count, speed_mult) v0.5 接下来 N 次攻击攻速提升(封顶×2)
 }
 
 ## ---- 生成型函数（v0.2：可出现在表达式位置，返回实体/区域引用） ----
@@ -87,6 +89,7 @@ const QUERY_FUNCS := {
 	"target_evade": 1,          # (target) v0.3 -> 目标闪避率 0-1
 	"attack_value": 0,          # v0.3 -> 持有者本次攻击的基础攻击值
 	"hit_chance": 1,            # (target) v0.3 -> 本击对目标的命中率 0-1
+	"nearest_ally": 1,          # (entity) v0.5 -> 距离最近的友军(嗜血之舞)
 }
 
 ## ---- 集合查询（v0.2：只能作为 for 的迭代源，返回实体/区域列表） ----
