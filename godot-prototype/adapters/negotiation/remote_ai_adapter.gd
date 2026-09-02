@@ -9,6 +9,7 @@ extends RefCounted
 const Base := preload("res://domain/negotiation/divine_adjudicator.gd")
 const GodConfig := preload("res://adapters/negotiation/god_config.gd")
 const ContextBuilder := preload("res://adapters/negotiation/context_builder.gd")
+const HttpProbe := preload("res://adapters/negotiation/http_probe.gd")
 
 ## 预加载的上下文缓存(保存 API 时构建;adjudicate 直接复用)
 var cached_context: Array = []
@@ -47,7 +48,9 @@ func adjudicate(facts: Dictionary, app: String) -> Dictionary:
 	msgs.append({"role": "user", "content": app})
 	var body := JSON.stringify({"model": model, "messages": msgs, "max_tokens": 4096,
 		"response_format": {"type": "json_object"}})
-	var resp := _http_post(endpoint, key, body)
+	# 端点需要补全为 /chat/completions(与探针一致;base 地址直接 POST 会 404)
+	var full_endpoint := HttpProbe.normalize_endpoint(endpoint)
+	var resp := _http_post(full_endpoint, key, body)
 	if not resp.get("ok", false):
 		return Base.normalize({
 			"stance": "REFUSE",
