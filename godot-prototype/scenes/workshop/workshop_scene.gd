@@ -15,6 +15,7 @@ var interactables: Array[Dictionary] = []
 var prompt: Label
 var toast: Label
 var hud: Label
+var god_settings_panel = null # 神祇设置面板(公共组件,含 saved 信号)
 var _nearby_id := ""
 var _toast_until := 0.0
 var _mira_spoken := false
@@ -121,8 +122,8 @@ func _build_workshop() -> void:
 		{"id": "forge", "position": Vector3(-3.6, 0.0, -2.9), "label": "铁砧 · 锻造"},
 		{"id": "altar", "position": Vector3(0.0, 0.0, -3.0), "label": "神裁砧 · 交涉"},
 		{"id": "armory", "position": Vector3(3.5, 0.0, -2.8), "label": "武器架 · 整装"},
-		{"id": "orders", "position": Vector3(-3.6, 0.0, 1.0), "label": "委托板 · 订单（即将开放）"},
-		{"id": "adventure", "position": Vector3(3.5, 0.0, 1.0), "label": "地图桌 · 出征（即将开放）"},
+		{"id": "orders", "position": Vector3(-3.6, 0.0, 1.0), "label": "委托板 · 订单"},
+		{"id": "adventure", "position": Vector3(3.5, 0.0, 1.0), "label": "地图桌 · 出征"},
 		{"id": "mira", "position": Vector3(-1.65, 0.0, 1.35), "label": "弥菈 · 对话"},
 		{"id": "exit", "position": Vector3(0.0, 0.0, 4.0), "label": "门口 · 离开铁匠铺"},
 	]
@@ -163,6 +164,17 @@ func _build_hud() -> void:
 	title.add_theme_font_size_override("font_size", 18)
 	title.modulate = Color("f0bd76")
 	layer.add_child(title)
+	# 神祇设置入口(公共组件,与开始界面/锻造台一致)
+	var god_btn := Button.new()
+	god_btn.text = "⚙ 神祇设置"
+	god_btn.position = Vector2(1006, 42)
+	god_btn.custom_minimum_size = Vector2(160, 0)
+	god_btn.pressed.connect(_toggle_god_settings)
+	layer.add_child(god_btn)
+	god_settings_panel = preload("res://scenes/common/god_settings_panel.gd").new()
+	god_settings_panel.position = Vector2(730, 90)
+	god_settings_panel.visible = false
+	layer.add_child(god_settings_panel)
 	prompt = Label.new()
 	prompt.position = Vector2(455, 635)
 	prompt.custom_minimum_size = Vector2(370, 48)
@@ -211,6 +223,15 @@ func _interact() -> void:
 			GameApp.goto("altar")
 		"armory":
 			GameApp.goto("armory")
+		"adventure":
+			GameApp.goto("battle")
+		"orders":
+			var r := GameApp.run
+			var weapon_count := r.weapons.size() if r != null and r.weapons != null else 0
+			if weapon_count == 0:
+				_show_toast("委托板空空如也——先在铁砧打一把武器,神明才会接下订单。")
+			else:
+				_show_toast("委托板: 带着武器出征验证机制,胜利会带来订单与酬劳。")
 		"exit":
 			GameApp.goto("start")
 		"mira":
@@ -227,6 +248,12 @@ func _interact() -> void:
 func _show_toast(text_value: String) -> void:
 	toast.text = text_value
 	_toast_until = Time.get_ticks_msec() / 1000.0 + 3.2
+
+
+func _toggle_god_settings() -> void:
+	if god_settings_panel == null:
+		return
+	god_settings_panel.visible = not god_settings_panel.visible
 
 
 func _add_forge(pos: Vector3) -> void:
