@@ -25,3 +25,7 @@ _research/
 .env
 credentials*
 apikey*.*
+# --- 预览/多媒体(录屏/波形/帧) ---
+*.avi
+*.wav
+*preview*
