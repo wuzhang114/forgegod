@@ -1,4 +1,4 @@
-# Godot 开发工具包(官方文档 · Skills · MCP · 命令行工作流)
+# Godot 开发工具包
 
 > 2026-09-02 调研归档。目标:围绕 forgegod(Godot 4.7.2 GDScript)建立文档/工具/工作流三件套。
 
@@ -49,7 +49,7 @@
 ## 4. 命令行开发工作流(本仓库标准)
 
 ```powershell
-# 全量测试(155 项;必须检查输出无 SCRIPT ERROR/Compile/FAIL)
+# 全量测试(164 项;必须检查输出无 SCRIPT ERROR/Compile/FAIL)
 .\scripts\devkit.ps1 test
 
 # 运行完整流程 / 单独战斗演示
