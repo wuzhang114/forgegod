@@ -32,6 +32,7 @@ const HttpContextTests := preload("res://tests/test_http_context.gd")
 const ForgeTests := preload("res://tests/test_forge.gd")
 const GodTests := preload("res://tests/test_scripted_god.gd")
 const BalanceTests := preload("res://tests/test_balance.gd")
+const ExpeditionTests := preload("res://tests/test_expedition.gd")
 
 ## 演示契约 A/B/C 的 MechLang 源码（与 00-m1-plan.md 一致）
 const SRC_RELIGHT := """
@@ -808,6 +809,7 @@ func _initialize() -> void:
 	_test_forge_core()
 	_test_scripted_god()
 	_test_balance()
+	_test_expedition()
 	print("=== 通过 %d / 失败 %d ===" % [_passes, _fails])
 	quit(0 if _fails == 0 else 1)
 
@@ -1837,3 +1839,10 @@ func _test_balance() -> void:
 	var r: Dictionary = t.run()
 	print("-- 数值源: 通过 %d / 失败 %d --" % [r.pass, r.fail])
 	_check(r.ok, "数值源测试全绿")
+
+
+func _test_expedition() -> void:
+	var t := ExpeditionTests.new()
+	var r: Dictionary = t.run()
+	print("-- 出征地图/规则: 通过 %d / 失败 %d --" % [r.pass, r.fail])
+	_check(r.ok, "出征地图测试全绿")

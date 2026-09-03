@@ -224,7 +224,7 @@ func _interact() -> void:
 		"armory":
 			GameApp.goto("armory")
 		"adventure":
-			GameApp.goto("battle")
+			GameApp.goto("expedition")
 		"orders":
 			var r := GameApp.run
 			var weapon_count := r.weapons.size() if r != null and r.weapons != null else 0

@@ -16,7 +16,7 @@ const PACKS := {
 			{"dq": 1, "dr": 3},
 		],
 	},
-	# 混合编队(近战+远程+净化者)
+	# 混编远程+净化者小队
 	"mixed": {
 		"label": "混编巡逻队",
 		"roles": {"brute": 3, "shooter": 1, "purger": 1},
@@ -24,6 +24,24 @@ const PACKS := {
 			{"dq": 0, "dr": 0, "role": "brute"}, {"dq": 1, "dr": 0, "role": "purger"},
 			{"dq": 0, "dr": 1, "role": "brute"}, {"dq": 1, "dr": 1, "role": "shooter"},
 			{"dq": 1, "dr": 3, "role": "brute"},
+		],
+	},
+	# 精英(出征中层): 点名精锐,前排重装 + 射手压制
+	"elite_golem": {
+		"label": "山脊卫队(精英)",
+		"roles": {"brute": 1, "shooter": 1, "purger": 2},
+		"slots": [
+			{"dq": 0, "dr": 0, "role": "purger"}, {"dq": 1, "dr": 0, "role": "brute"},
+			{"dq": 0, "dr": 1, "role": "purger"}, {"dq": 1, "dr": 1, "role": "shooter"},
+		],
+	},
+	# 首领(末层): 熔核巨像 + 护法
+	"boss_golem": {
+		"label": "熔核巨像",
+		"roles": {"brute": 1, "shooter": 1, "purger": 2},
+		"slots": [
+			{"dq": 0, "dr": 0, "role": "purger"}, {"dq": 1, "dr": 0, "role": "purger"},
+			{"dq": 0, "dr": 1, "role": "brute"}, {"dq": 1, "dr": 2, "role": "shooter"},
 		],
 	},
 }

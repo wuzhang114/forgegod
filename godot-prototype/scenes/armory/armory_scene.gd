@@ -48,9 +48,9 @@ func _build_ui() -> void:
 	bottom.add_theme_constant_override("separation", 12)
 	add_child(bottom)
 	var go := Button.new()
-	go.text = "⚔ 出战验证(棋盘)"
+	go.text = "⚔ 出征(分支地图)"
 	go.custom_minimum_size = Vector2(220, 40)
-	go.pressed.connect(func(): GameApp.goto("battle"))
+	go.pressed.connect(func(): GameApp.goto("expedition"))
 	bottom.add_child(go)
 	var back := Button.new()
 	back.text = "← 回神裁砧"

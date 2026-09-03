@@ -67,6 +67,11 @@ var board_origin := BOARD_CENTER
 var current_pack_id := "golems"      # 当前敌群包(内容注册表)
 var sim_seed := 7                    # 本场战斗种子(由 run seed + 地图 + 天数派生)
 var last_report: Dictionary = {}     # 战报(第 4 步结算消费)
+## 远征模式(从出征地图进入): 敌群按层变强、战斗后返回地图、不触发每日结算
+var expedition_mode := false
+var expedition_floor := 1
+var expedition_type := "combat"
+var return_button: Button = null
 ## 玩家主动技输入累积(确定性): [{cid, at}] —— 每次重模拟整体注入,先放的技能不丢失
 var skill_log: Array = []
 
@@ -83,10 +88,38 @@ func _ready() -> void:
 	# 背景和单位都按最近邻采样，保留像素簇的硬边缘。
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_build_ui()
+	_detect_expedition()
 	map_rng.randomize()
 	_select_battle_map()
+	_apply_expedition_override()
 	_setup_deploy()
 	_process_ui()
+
+
+## 远征接缝: 出征地图写入 awaiting_battle 后进入本场景
+func _detect_expedition() -> void:
+	var exp: Dictionary = GameApp.run.expedition
+	expedition_mode = str(exp.get("awaiting_battle", "")) != ""
+	if expedition_mode:
+		expedition_floor = int(exp.get("battle_floor", 1))
+		expedition_type = str(exp.get("battle_type", "combat"))
+
+
+## 远征覆盖: 敌群包由层数/节点类型决定;种子由层数派生(可复现);标题展示层信息
+func _apply_expedition_override() -> void:
+	if not expedition_mode:
+		return
+	var Rules := preload("res://domain/expedition/expedition_rules.gd")
+	var Map := preload("res://domain/expedition/expedition_map.gd")
+	current_pack_id = Rules.pack_for(expedition_floor, expedition_type)
+	sim_seed = BattleScenario.derive_battle_seed(_run_seed_of(), str(battle_map.id), expedition_floor)
+	var sc := Rules.scale_for_floor(expedition_floor)
+	ui.map.text = "第 %d 层 · %s · %s(血 ×%.2f 攻 ×%.2f)" % [
+		expedition_floor, Map.TYPE_LABEL.get(expedition_type, "战斗"),
+		str(EnemyPacks.get_pack(current_pack_id).get("label", "")),
+		float(sc.hp), float(sc.atk)]
+	if return_button != null:
+		return_button.text = "◀ 返回地图"
 
 
 ## ---------------- 坐标 ----------------
@@ -341,6 +374,12 @@ func _make_entity(e: Dictionary) -> Dictionary:
 	var opt: Dictionary = Bal.hero_tpl(role) if is_hero else Bal.enemy_tpl(role)
 	opt = opt.duplicate()
 	opt.grid = e.grid
+	if not is_hero and expedition_mode:
+		# 敌人逐层变强: 第 1 层基准,每层 +12% HP / +10% 攻击
+		var Rules := preload("res://domain/expedition/expedition_rules.gd")
+		var sc := Rules.scale_for_floor(expedition_floor)
+		opt.hp = float(opt.hp) * float(sc.hp)
+		opt.atk = float(opt.atk) * float(sc.atk)
 	if is_hero:
 		# 武器面板按"装备"归属: 该英雄装上锻造武器 -> 用其事实,战斗生效;未装备 -> 演示默认
 		var EquipWeapon := preload("res://application/equip_weapon.gd")
@@ -417,7 +456,12 @@ func _cast_active(sid: String) -> void:
 
 
 ## 返回铁匠铺: 先结算(幂等: 同一 scenario 只结算一次),再导航
+## 远征模式: 不结算(每日结算在打通/撤退时一次处理),把结果交回出征地图
 func _settle_and_return() -> void:
+	if expedition_mode:
+		GameApp.run.expedition["battle_result"] = str(sim.battle_result) if sim != null else "timeout"
+		GameApp.goto("expedition")
+		return
 	if not last_report.is_empty():
 		var Settlement := preload("res://application/settle_day.gd")
 		Settlement.settle(GameApp.run, last_report)
@@ -823,8 +867,10 @@ func _build_ui() -> void:
 	add_btn.call("⏪ -3s", func(): _set_tick(play_tick - 60))
 	add_btn.call("⏩ +3s", func(): _set_tick(play_tick + 60))
 	add_btn.call("跳到结束", func(): _set_tick(total_ticks))
-	add_btn.call("← 返回铁匠铺", func():
-		_settle_and_return())
+	return_button = Button.new()
+	return_button.text = "◀ 返回铁匠铺"
+	return_button.pressed.connect(_settle_and_return)
+	hbox.add_child(return_button)
 	# 右侧技能面板(主动技集中;垂直排列,按钮按武器库契约动态生成)
 	ui.skill_box = VBoxContainer.new()
 	ui.skill_buttons = []
