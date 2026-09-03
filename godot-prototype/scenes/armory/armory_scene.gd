@@ -60,7 +60,7 @@ func _build_ui() -> void:
 	var home := Button.new()
 	home.text = "⟲ 回铁匠铺"
 	home.custom_minimum_size = Vector2(160, 40)
-	home.pressed.connect(func(): GameApp.goto("forge"))
+	home.pressed.connect(func(): GameApp.goto("workshop"))
 	bottom.add_child(home)
 
 

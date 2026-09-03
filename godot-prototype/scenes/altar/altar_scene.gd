@@ -106,7 +106,7 @@ func _build_ui() -> void:
 	ui.back.position = Vector2(80, 505)
 	ui.back.custom_minimum_size = Vector2(200, 32)
 	ui.back.pressed.connect(func():
-		GameApp.goto("forge"))
+		GameApp.goto("workshop"))
 	add_child(ui.back)
 
 

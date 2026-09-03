@@ -6,7 +6,7 @@ config_version=5
 
 config/name="ForgeGod Prototype"
 config/description="铁匠铺 x 锻造之神机制生成原型"
-run/main_scene="res://scenes/forge/forge_scene.tscn"
+run/main_scene="res://scenes/start/start_menu.tscn"
 config/features=PackedStringArray("4.6")
 
 [autoload]

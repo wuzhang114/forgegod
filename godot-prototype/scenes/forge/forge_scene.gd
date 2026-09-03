@@ -92,6 +92,8 @@ func _build_run_bar() -> void:
 		ui.tip.text = "新局已开(第 1 天)")
 	mk.call("⚙ 神祇设置", func():
 		ui.god_panel.visible = not ui.god_panel.visible)
+	mk.call("← 回铁匠铺", func():
+		GameApp.goto("workshop"))
 	# 运行信息(经济/队伍;RunState 唯一来源)
 	ui.runinfo = Label.new()
 	ui.runinfo.position = Vector2(400, 20)
@@ -550,7 +552,7 @@ func _on_next() -> void:
 			"facts": result_weapon, "durability": 100.0, "contracts": [], "holder_id": ""}
 		GameApp.run.weapons.append(instance)
 		Session.weapon_instance_id = str(instance.instance_id)
-		GameApp.goto("altar")
+	GameApp.goto("altar")
 		return
 	# 确定当前阶段
 	if not stage in done_stages:

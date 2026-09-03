@@ -3,6 +3,8 @@
 extends RefCounted
 
 const SCENES := {
+	"start": "res://scenes/start/start_menu.tscn",
+	"workshop": "res://scenes/workshop/workshop_scene.tscn",
 	"forge": "res://scenes/forge/forge_scene.tscn",
 	"altar": "res://scenes/altar/altar_scene.tscn",
 	"armory": "res://scenes/armory/armory_scene.tscn",

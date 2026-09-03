@@ -421,7 +421,7 @@ func _settle_and_return() -> void:
 	if not last_report.is_empty():
 		var Settlement := preload("res://application/settle_day.gd")
 		Settlement.settle(GameApp.run, last_report)
-	GameApp.goto("forge")
+	GameApp.goto("workshop")
 
 
 func _update_units(animate: bool = true) -> void:
